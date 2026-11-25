@@ -59,12 +59,22 @@ enum DiaryAgent: String, CaseIterable, Identifiable, Codable, Sendable {
 
 struct DiaryRoutine: Codable, Equatable, Sendable {
     static let briefTemplate = """
-    Review the project sources you can access for this workday: relevant project chats, my GitHub contributions, \
-    project Slack channels, calendar events, and meeting notes from Granola or another connected tool.
+    Evidence. Review my work for this project in GitHub, project chats, Slack, the calendar, and meeting notes \
+    from Granola or another connected tool. Stick to the project’s repos, channels, and events. Keep other \
+    clients and personal activity out. Use PR descriptions and reviews to check why a change mattered and \
+    what shipped. Summarize discussions only when notes, transcripts, or documented follow-ups support them.
 
-    Lead with confirmed outcomes and decisions. Include blockers and suggested next steps when relevant. \
-    Write a 30–45 second first-person standup I can read aloud. Link to the evidence and flag any important \
-    gaps in what you could verify.
+    Diary. Lead with one outcome in the headline and summarize why it mattered in one or two sentences. \
+    Group related work by ticket or area when helpful. Link to the evidence for outcomes and decisions. \
+    Add a short “Calls” or “If asked” section when the details would help a teammate. Flag important gaps in the evidence.
+
+    Blockers and next steps. Check that each blocker is still open. Say what is blocked, what or whom it \
+    waits on, and since when if you can verify it. Put my own to-dos under Suggested next. Give up to three \
+    concrete next steps, each with a reason grounded in the current evidence.
+
+    Standup. On active days, write a 30–45 second first-person update, roughly 80–110 words. Give a sentence \
+    of context, explain why the main outcome mattered, mention any real blocker, and end with what I plan to do \
+    next. Name PRs by what they change. Use plain spoken language.
     """
 
     var id = UUID()

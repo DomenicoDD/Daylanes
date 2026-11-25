@@ -98,7 +98,7 @@ struct DiaryRoutineView: View {
             TextEditor(text: Binding(get: { value.brief }, set: { routine?.brief = $0 }))
                 .font(.body)
                 .padding(5)
-                .frame(minHeight: 132)
+                .frame(minHeight: 180)
                 .scrollContentBackground(.hidden)
                 .background(Theme.block.opacity(0.65), in: RoundedRectangle(cornerRadius: 7))
                 .accessibilityLabel("Project diary brief")

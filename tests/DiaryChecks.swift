@@ -95,8 +95,10 @@ struct DiaryChecks {
         let requested: JSON = .object([("work_date", .string(tuesday.iso))])
         var defaultWriter = session(peerRoutine)
         let defaultBrief = try call("get_diary_work", requested, using: &defaultWriter)["result"]["structuredContent"]["data"]["brief"].stringValue
-        try check(defaultBrief == DiaryRoutine.briefTemplate && defaultBrief?.contains("first-person standup") == true,
-                  "a newly saved diary starts with a usable brief")
+        try check(defaultBrief == DiaryRoutine.briefTemplate && defaultBrief?.contains("80–110 words") == true
+                  && defaultBrief?.contains("notes, transcripts, or documented follow-ups") == true
+                  && defaultBrief?.contains("Check that each blocker is still open") == true,
+                  "a newly saved diary guides the writer on evidence, blockers and standup length")
         let instruction = DiarySchedule.instruction(peerRoutine.id)
         try check(instruction.contains(DiarySchedule.serverName(peerRoutine.id)) && instruction.contains("get_diary_work({})")
                   && instruction.contains("submit_diary_entry") && instruction.contains("work_date, window, through, and revision")
