@@ -18,9 +18,11 @@ enum LicenceStamp {
     static let fileName = "licence-stamp.json"
     private static let version = 1
 
-    /// ~/Library/Application Support/Daylanes/licence-stamp.json
+    /// ~/Library/Application Support/Daylanes/licence-stamp.json, with $HOME first like the ledger path
+    /// (core/Values.swift), so a test with its own HOME never reads or writes the real stamp.
     static var defaultPath: String {
-        NSHomeDirectory() + "/Library/Application Support/Daylanes/" + fileName
+        let home = ProcessInfo.processInfo.environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
+        return home + "/Library/Application Support/Daylanes/" + fileName
     }
 
     static func write(_ stamp: Stamp, to path: String = defaultPath) throws {
