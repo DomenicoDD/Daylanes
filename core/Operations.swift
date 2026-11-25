@@ -108,7 +108,7 @@ enum Engine {
     static let operations: [String: EngineOperation] = {
         var table: [String: EngineOperation] = [:]
         for operation in SetupOperations.all + FocusOperations.all + SyncOperations.all + ReportOperations.all
-                            + NetworkOperations.all + AgentOperations.all {
+                            + NetworkOperations.all + AgentOperations.all + DiaryOperations.all {
             precondition(table[operation.name] == nil, "Duplicate operation \(operation.name)")
             table[operation.name] = operation
         }

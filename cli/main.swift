@@ -51,6 +51,22 @@ if let status = MCP.run(arguments: arguments) {
     exit(status)
 }
 
+if arguments.first == "diary-run" {
+    guard arguments.count == 7, let routine = UUID(uuidString: arguments[2]),
+          let agent = DiaryAgent(rawValue: arguments[3]), let session = UUID(uuidString: arguments[6]) else {
+        FileHandle.standardError.write(Data("tracker: invalid diary-run arguments\n".utf8))
+        exit(2)
+    }
+    do {
+        try DiarySchedule.run(database: arguments[1], id: routine, conversation: .init(
+            agent: agent, executable: arguments[4], directory: arguments[5], session: session))
+        exit(0)
+    } catch {
+        FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
+        exit(1)
+    }
+}
+
 if arguments.isEmpty || arguments == ["-h"] || arguments == ["--help"] {
     print(CLI.usage)
     exit(arguments.isEmpty ? 2 : 0)

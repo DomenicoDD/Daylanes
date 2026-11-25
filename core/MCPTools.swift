@@ -41,6 +41,7 @@ struct MCPTool {
             case "integer": matches = value.intValue != nil
             case "boolean": matches = value.boolValue != nil
             case "array": matches = value.arrayValue?.allSatisfy { $0.stringValue != nil } ?? false
+            case "object": matches = value.pairs != nil
             default: matches = true
             }
             guard matches else { throw EngineError.invalid("Invalid value for \(key)") }

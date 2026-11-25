@@ -5,7 +5,13 @@ struct AgentMCPCommand {
     let database: String
     var allowSetup = false
 
-    var arguments: [String] { ["mcp", allowSetup ? "--access=write" : "--access=read", "--db=\(database)"] }
+    var diaryRoutine: UUID?
+
+    var arguments: [String] {
+        var arguments = ["mcp", allowSetup || diaryRoutine != nil ? "--access=write" : "--access=read", "--db=\(database)"]
+        if let diaryRoutine { arguments.append("--diary-project=\(diaryRoutine.uuidString)") }
+        return arguments
+    }
 
     func registration(using prefix: String) -> String {
         let invocation = ([executable] + arguments).map { argument in
@@ -113,7 +119,7 @@ struct AgentMCPSetup: View {
     }
 }
 
-private struct SetupCodeBlock: View {
+struct SetupCodeBlock: View {
     let title: String
     let values: [String]
 

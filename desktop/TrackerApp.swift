@@ -46,11 +46,12 @@ private extension View {
 }
 
 enum Page: Hashable {
-    case timeline, review, reports, overview, clients, projects, project(String), client(String)
+    case timeline, diary, review, reports, overview, clients, projects, project(String), client(String)
 
     var title: String {
         switch self {
         case .timeline: "Timeline"
+        case .diary: "Diary"
         case .review: "Review"
         case .reports: "Reports"
         case .overview: "Overview"
@@ -272,7 +273,7 @@ struct Dashboard: View {
     private var subtitle: String {
         guard let snapshot = model.snapshot else { return "" }
         switch page ?? .overview {
-        case .timeline: return ""
+        case .timeline, .diary: return ""
         case .reports: return reports.subtitle
         case .review: return "\(snapshot.unassigned.count.formatted()) unassigned · \(snapshot.dateLabel)"
         case let .project(name):
@@ -299,6 +300,7 @@ struct Dashboard: View {
         List {
             navRow(.overview) { Label("Overview", systemImage: "chart.bar") }
             navRow(.timeline) { Label("Timeline", systemImage: "calendar") }
+            navRow(.diary) { Label("Diary", systemImage: "book") }
             navRow(.review, count: model.snapshot?.unassigned.count ?? 0) { Label("Review", systemImage: "tray") }
             navRow(.reports) { Label("Reports", systemImage: "doc.text") }
             navRow(.clients) { Label("Clients", systemImage: "person") }
@@ -625,6 +627,8 @@ struct Dashboard: View {
     private func content(_ snapshot: Snapshot) -> some View {
         if page == .reports {
             reportsContent(snapshot)
+        } else if page == .diary {
+            DiaryPage(snapshot: snapshot)
         } else {
             scrollingContent(snapshot)
         }
@@ -672,7 +676,7 @@ struct Dashboard: View {
                         usage(snapshot)
                     case .review:
                         review(snapshot)
-                    case .reports:
+                    case .reports, .diary:
                         EmptyView()
                     case let .project(name):
                         if let project = snapshot.projects.first(where: { $0.name == name }) {

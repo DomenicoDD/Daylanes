@@ -600,3 +600,29 @@ Writing the queries first and then reading the code turned up these gaps. The fi
 8. **A block does not say which rule matched it**, only the keyword (query 19).
 9. **The exchange rate is in `get_billing_terms` only** (query 23). `usage_report` mixes ledger currency and dollars without it.
 10. **A new worktree of a mapped repository starts unassigned.** Codex makes one per task under `~/.codex/worktrees`. `list_unassigned` now points at the project, but the agent or the person still has to map each one. The engine should count a linked worktree for its main checkout's project.
+
+## Write a project diary
+
+Use the registration command in **Diary → Project routines**. It starts the same local stdio server with `--access=write --diary-project=ROUTINE_UUID`. This connection exposes only `get_diary_work` and `submit_diary_entry` for that project. The default read access offers only the first tool. Regular ledger connections cannot use these tools.
+
+1. Call `get_diary_work` with an empty object. Read the project, the current `brief` and the returned `work`. If `work` is null, there is no due draft. Pass `work_date` only to intentionally backfill or refresh that date.
+2. Gather evidence from `start_inclusive` through `evidence_before` (exclusive). `end_exclusive` is the workday cutoff and can be later than the evidence cutoff on an early run. The draft contains the last agent entry and any user-edited fields.
+3. Call `submit_diary_entry` with `work_date`, `window`, `through` and `revision` copied from the result. Add one structured `entry` object, for example:
+
+```json
+{
+  "headline": "Workshop fixtures approved",
+  "summary": "The team ran the rehearsal and approved the sample fixtures.",
+  "standup": "I rehearsed the fixtures with the team. Next I’ll check the handoff.",
+  "outcomes": "The rehearsal passed.",
+  "decisions": "Keep the sample short.",
+  "blockers": "Waiting on a spare fixture.",
+  "next_steps": "Rehearse the handoff.",
+  "sections": [{"title": "Discussion", "text": "Ask about the spare fixture."}],
+  "sources": [{"title": "Synthetic rehearsal notes", "url": "https://example.com/workshop/rehearsal"}]
+}
+```
+
+Headline and summary are required. Additional sections can include their own `sources` array. Use labeled HTTP or HTTPS links. Each project and date has one draft. An exact retry leaves the revision unchanged. If another writer refreshed the draft first, fetch the current revision and interval before trying again. The app keeps personal edits separately and overlays them on the latest draft. An already-saved draft keeps its original workday window after a cutoff or time zone change.
+
+The schedule checks the oldest unfinished date starting with the day before the routine was first saved. A missed early run can go directly to a completed draft. The next check after a failed handoff retries after a 15-minute delay. For late evidence after a completed draft, refresh the specific work date.

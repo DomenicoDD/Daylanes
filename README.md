@@ -22,7 +22,7 @@ The default build is free to use and requires no checkout or licence key. Both f
 
 This repository provides the macOS app, CLI, MCP server, browser extension, and optional checkout Worker. The project website has its own repository.
 
-The app opens to **Timeline** and imports recent local transcripts on launch. The sidebar holds **Timeline**, **Review**, **Overview**, **Clients** and **Projects**, followed by your projects grouped by client. The tracking pill in the toolbar shows what Tracker is recording; click it to start or pause automatic tracking. The refresh button (⌘R) imports new activity while the app is open. On Review, Overview and project pages, the period selector switches between this and last week or month.
+The app opens to **Timeline** and imports recent local transcripts on launch. The sidebar holds **Timeline**, **Diary**, **Review**, **Reports**, **Overview**, **Clients** and **Projects**, followed by your projects grouped by client. The tracking pill in the toolbar shows what Tracker is recording; click it to start or pause automatic tracking. The refresh button (⌘R) imports new activity while the app is open. On Review, Overview and project pages, the period selector switches between this and last week or month.
 
 - **Timeline** shows auto-tracked and Toggl time for a day or week, with agent activity for the day. Use **Rules…** to route future time to projects.
 - **Review** groups unassigned agent activity by recorded folder, branch, and provider. Assign a group to a project, or save a folder rule to apply to all unassigned activity in that folder and its descendants. You can move already assigned groups and keep individual exceptions.
@@ -86,7 +86,7 @@ Open **Settings → Integrations → Toggl Track** and enter the API token from 
 
 ### Local data
 
-Tracker stores its ledger on this Mac and has no hosted workspace or cross-device sync. Integration requests go directly to their providers. Tracker stores Toggl and AI provider credentials in macOS Keychain, outside the ledger and CSV exports. The desktop app, CLI and MCP server share the same SQLite ledger, which defaults to `~/.local/share/tracker/ledger.sqlite3`. You can set `TRACKER_DB` to select a different ledger or pass `--db` to the CLI. The desktop app sets the reporting timezone from macOS if the ledger has no timezone. Tracker keeps reporting metadata and does not store prompts or source code.
+Tracker stores its ledger on this Mac and has no hosted workspace or cross-device sync. Integration requests go directly to their providers. Tracker stores Toggl and AI provider credentials in macOS Keychain, outside the ledger and CSV exports. The desktop app, CLI and MCP server share the same SQLite ledger, which defaults to `~/.local/share/tracker/ledger.sqlite3`. You can set `TRACKER_DB` to select a different ledger or pass `--db` to the CLI. The desktop app sets the reporting timezone from macOS if the ledger has no timezone. Tracker stores reporting metadata in the ledger. Diary also stores your project briefs, entries and reference links there. Source conversations and their connections stay with the chosen agent.
 
 ## CLI and MCP
 
@@ -166,6 +166,18 @@ claude mcp add --scope user --transport stdio tracker -- "$tracker_cli" mcp
 
 The server runs locally over stdio and reads the ledger directly, so it works with the app closed. Read access includes projects, rules, the installed app catalog, activity and billing reports. Some data is also available as `tracker://` resources. Turn on **Allow project and rule setup** in Daylanes’ **Connect an agent** dialog or start the server with `--access write` to let an agent set up clients, projects, folder mappings and tracking rules. For example, the agent can find Xcode with `list_installed_apps` and map the returned app identifier to a project with `create_tracking_rule`. Rules set up this way appear in **Timeline → Rules**. `--toolsets core,billing,admin,setup` trims the list, and `--db` or `TRACKER_DB` selects another ledger. Results become available to the connected agent and can be included in its model context. See [MCP queries](docs/MCP_QUERIES.md) for example calls.
 
+## Project diary
+
+Open **Diary → Project routines**, choose a project and a writing agent, then save your prompt. Set when the workday starts and which time zone it uses. Choose a run time or **First morning availability**. For example, with a 05:00 cutoff in Europe/Rome, Wednesday at 03:15 is part of Tuesday’s diary. A run at 03:00 drafts Tuesday through 03:00 and refreshes the same entry from 05:00.
+
+Open the setup disclosure and run the generated MCP registration command with the selected CLI. Start a dedicated local Codex or Claude Code conversation in the project folder. Give the agent access to the chats, GitHub contributions, Slack channels, calendar or meeting notes your prompt calls for. Paste the standing instruction into that conversation once. Later edits to the prompt are picked up automatically.
+
+For recurring runs, enter the local conversation UUID, the project folder and the full CLI path (from `command -v codex` or `command -v claude`) in Daylanes. Choose **Enable local schedule**. macOS resumes the conversation when a workday is due and checks for missed work on wake or sign-in, including when Daylanes is closed. Verify your conversation can use its required tools without prompting. If a run fails, check the status in **Project routines** and the agent’s local conversation. Use **Turn off schedule** before changing the conversation or moving the app. For a one-off backfill, ask the registered agent to fetch and write a specific work date.
+
+In Diary, select the work date, client and project. **Copy** copies the filtered standup. **Edit** changes the displayed wording. Later agent refreshes update any untouched fields and keep your edits.
+
+See [the Diary MCP contract](docs/MCP_QUERIES.md#write-a-project-diary) for payload fields and retry behavior.
+
 ## Automatic human time
 
 Click the tracking pill in the toolbar, or choose **Settings → General → Start tracking**, once. Tracker remembers the setting and resumes on future launches. Click the pill again to pause until you start again. Close the window to leave Tracker running, and use the clock in the menu bar to open it or pause. For startup at login, choose **Settings → General → Open at login**. macOS manages that preference under Login Items. [Apple Login Items API](https://developer.apple.com/documentation/servicemanagement/smappservice)
@@ -204,6 +216,8 @@ xcrun swiftc -parse-as-library core/*.swift tests/CoreChecks.swift -o "$focus_ch
 "$focus_checks_dir/core"
 xcrun swiftc -parse-as-library core/*.swift tests/MCPChecks.swift -o "$focus_checks_dir/mcp"
 "$focus_checks_dir/mcp"
+xcrun swiftc -parse-as-library core/*.swift tests/DiaryChecks.swift -o "$focus_checks_dir/diary"
+"$focus_checks_dir/diary"
 xcrun swiftc -parse-as-library core/HTTP.swift desktop/GoogleCalendarAPI.swift desktop/GoogleCalendarAccountStore.swift \
   desktop/GoogleCalendarCallback.swift tests/GoogleCalendarChecks.swift -o "$focus_checks_dir/calendar"
 "$focus_checks_dir/calendar"

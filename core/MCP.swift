@@ -25,8 +25,9 @@ enum MCP {
     struct Options {
         var databasePath: String
         var access: Access = .read
-        /// Limits the tools to these toolsets (core, billing, admin); nil offers all.
+        /// Limits the regular connection to toolsets. A Diary connection is always project-scoped.
         var toolsets: Set<String>?
+        var diaryRoutine: UUID?
     }
 
     /// A resource a client can attach: the same data as a tool, under a `tracker://` address.
@@ -63,11 +64,16 @@ enum MCP {
 
         init(options: Options) { self.options = options }
 
-        /// The tools this connection may use: registered in the engine and in a chosen toolset. Tools that read
-        /// are always offered. The setup tools write, and need `--access write`; every other operation that
-        /// writes waits for the change log and approvals (plan section 6).
+        /// Diary connections are bound to one project and expose only its diary tools.
         var tools: [MCPTool] {
-            MCPTools.all.filter { tool in
+            if let id = options.diaryRoutine {
+                return DiaryOperations.tools.filter { $0.name != "submit_diary_entry" || options.access == .write }.map { tool in
+                    var tool = tool
+                    tool.fixed = [("routine_id", .string(id.uuidString))]
+                    return tool
+                }
+            }
+            return MCPTools.all.filter { tool in
                 guard let operation = Engine.operation(tool.operation) else { return false }
                 if operation.effect != .read {
                     guard options.access == .write, tool.toolset == "setup", operation.effect == .config else { return false }
@@ -100,7 +106,8 @@ enum MCP {
                     ])),
                     ("serverInfo", .object([("name", .string("tracker")), ("title", .string("Daylanes")),
                                             ("version", .string(MCP.serverVersion))])),
-                    ("instructions", .string(MCP.instructions(options.access))),
+                    ("instructions", .string(options.diaryRoutine == nil ? MCP.instructions(options.access) :
+                        "This connection is scoped to a single Daylanes project diary. Fetch the current brief and exact evidence window with get_diary_work.")),
                 ]))
             case "ping":
                 return MCP.success(id: id, .object([]))
@@ -169,6 +176,10 @@ enum MCP {
                 let updatedRule = tool.name == "update_tracking_rule" && data["updated"].boolValue == true
                 if createdRule || updatedRule {
                     DistributedNotificationCenter.default().postNotificationName(Focus.rulesChanged, object: nil,
+                                                                                 userInfo: nil, deliverImmediately: true)
+                }
+                if tool.name == "submit_diary_entry", data["changed"].boolValue == true {
+                    DistributedNotificationCenter.default().postNotificationName(DiaryStore.changed, object: nil,
                                                                                  userInfo: nil, deliverImmediately: true)
                 }
                 if tool.name == "get_status" { data.set("access", .string(options.access.rawValue)) }
@@ -244,7 +255,7 @@ enum MCP {
         }
     }
 
-    /// `tracker [--db PATH] mcp [--access read|write] [--toolsets core,billing,admin,setup]`.
+    /// `tracker [--db PATH] mcp [--access read|write] [--toolsets core,billing,admin,setup] [--diary-project ROUTINE_ID]`.
     /// Returns the exit status, or nil when the arguments are another command.
     static func run(arguments: [String], environment: [String: String] = ProcessInfo.processInfo.environment) -> Int32? {
         var rest = arguments[...]
@@ -273,7 +284,7 @@ enum MCP {
             let parts = word.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
             let name = parts[0]
             var value: String? = parts.count > 1 ? parts[1] : nil
-            if value == nil, ["--access", "--toolsets", "--db"].contains(name), let next = rest.first {
+            if value == nil, ["--access", "--toolsets", "--db", "--diary-project"].contains(name), let next = rest.first {
                 value = next
                 rest = rest.dropFirst()
             }
@@ -290,11 +301,17 @@ enum MCP {
                 let unknown = chosen.subtracting(["core", "billing", "admin", "setup"])
                 guard unknown.isEmpty, !chosen.isEmpty else { return refuse("--toolsets takes core, billing, admin and setup") }
                 options.toolsets = chosen
+            case "--diary-project":
+                guard let id = UUID(uuidString: value) else { return refuse("--diary-project needs a routine UUID") }
+                options.diaryRoutine = id
             case "--db":
                 database = value
             default:
                 return refuse("unrecognized argument \(word)")
             }
+        }
+        if options.diaryRoutine != nil, options.toolsets != nil {
+            return refuse("--diary-project cannot be combined with --toolsets")
         }
         options.databasePath = database.map { Values.resolvedPath($0) } ?? Values.databasePath(environment: environment)
         serve(options: options)

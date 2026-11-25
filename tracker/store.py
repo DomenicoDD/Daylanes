@@ -107,6 +107,17 @@ CREATE TABLE IF NOT EXISTS focus_clients (
     block_id TEXT PRIMARY KEY REFERENCES focus_blocks(id) ON DELETE CASCADE,
     client TEXT NOT NULL REFERENCES clients(name) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS diary_routines (
+    project TEXT PRIMARY KEY REFERENCES projects(name) ON UPDATE CASCADE ON DELETE CASCADE,
+    id TEXT NOT NULL UNIQUE, profile TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS diary_entries (
+    project TEXT NOT NULL REFERENCES projects(name) ON UPDATE CASCADE ON DELETE CASCADE,
+    work_date TEXT NOT NULL, window TEXT NOT NULL, through INTEGER NOT NULL,
+    revision INTEGER NOT NULL, content TEXT NOT NULL, edits TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY (project, work_date)
+);
+CREATE INDEX IF NOT EXISTS diary_entries_work_date ON diary_entries(work_date);
 """
 ENTRY_FIELDS = (
     "id", "kind", "at", "provider", "model", "session", "folder", "branch", "task", "project",
