@@ -47,7 +47,7 @@ struct DiaryPage: View {
             .frame(maxWidth: 860, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .scrollIndicators(.automatic)
+        .scrollIndicators(.hidden)
         .accessibilityIdentifier("diary-page")
         .task(id: snapshot.database) { reload() }
         .onReceive(DistributedNotificationCenter.default().publisher(for: DiaryStore.changed)) { _ in reload() }
@@ -214,7 +214,7 @@ struct DiaryPage: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, quiet(row) ? 18 : 34)
+            .padding(.bottom, quiet(row) ? 28 : 36)
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -295,10 +295,16 @@ struct DiaryPage: View {
 
     private func entryView(_ entry: DiaryEntry) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                if project == nil {
-                    Chip(text: entry.project, tint: .forProject(entry.project))
-                }
+            if project == nil {
+                Chip(text: entry.project, tint: .forProject(entry.project))
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(entry.headline)
+                    .font(.system(size: 22, weight: .semibold, design: .serif))
+                    .foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 Button("Edit…", systemImage: "pencil") { editing = entry }
                     .buttonStyle(.borderless)
@@ -306,12 +312,6 @@ struct DiaryPage: View {
                     .foregroundStyle(Theme.secondary)
                     .accessibilityLabel("Edit \(entry.project) diary")
             }
-            Text(entry.headline)
-                .font(.system(size: 22, weight: .semibold, design: .serif))
-                .foregroundStyle(Theme.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-                .accessibilityAddTraits(.isHeader)
             if !entry.summary.isEmpty {
                 Text(entry.summary)
                     .font(.system(size: 14))
