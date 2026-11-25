@@ -46,6 +46,27 @@ if arguments.first == "call" {
     }
 }
 
+// tracker [--db PATH] diary guide|work|submit ROUTINE: what a pasted Diary prompt runs (core/DiaryGuide.swift).
+do {
+    var rest = arguments[...]
+    var database = Values.databasePath()
+    if let first = rest.first, first.hasPrefix("--db=") {
+        database = Values.resolvedPath(String(first.dropFirst(5)))
+        rest = rest.dropFirst()
+    } else if rest.first == "--db", rest.count > 1 {
+        database = Values.resolvedPath(rest[rest.startIndex + 1])
+        rest = rest.dropFirst(2)
+    }
+    if rest.first == "diary" {
+        let cli = Bundle.main.executablePath ?? CommandLine.arguments[0]
+        let (status, text) = DiaryCLI.run(Array(rest.dropFirst()), database: database, cli: cli) {
+            FileHandle.standardInput.readDataToEndOfFile()
+        }
+        (status == 0 ? FileHandle.standardOutput : FileHandle.standardError).write(Data((text + "\n").utf8))
+        exit(status)
+    }
+}
+
 // tracker mcp: the local MCP server for agents (core/MCP.swift).
 if let status = MCP.run(arguments: arguments) {
     exit(status)
