@@ -9,7 +9,7 @@ struct DiaryPage: View {
     @State private var clock: DiaryClock?
     @State private var client: String?
     @State private var project: String?
-    @State private var showsRoutines = false
+    @State private var setup: SetupTarget?
     @State private var editing: DiaryEntry?
     @State private var copied = false
     @State private var error: String?
@@ -26,19 +26,7 @@ struct DiaryPage: View {
             index
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if showsRoutines {
-                        DiaryRoutineView(database: snapshot.database, projects: snapshot.projects,
-                                         initialProject: project) { name in
-                            client = snapshot.projects.first { $0.name == name }?.client
-                            project = name
-                            showsRoutines = false
-                            reload()
-                        }
-                    } else {
-                        reading
-                    }
-                }
+                VStack(alignment: .leading, spacing: 20) { reading }
                 .padding(24)
                 .frame(maxWidth: 760, alignment: .leading)
                 .frame(maxWidth: .infinity)
@@ -57,6 +45,13 @@ struct DiaryPage: View {
         .sheet(item: $editing) { entry in
             DiaryEntryEditor(database: snapshot.database, entry: entry, didSave: reload)
         }
+        .sheet(item: $setup) { target in
+            DiarySetupSheet(database: snapshot.database, projects: snapshot.projects, project: target.project) { name in
+                client = snapshot.projects.first { $0.name == name }?.client
+                project = name
+                reload()
+            }
+        }
     }
 
     private var index: some View {
@@ -67,7 +62,6 @@ struct DiaryPage: View {
             if let currentDay {
                 let date = Binding(get: { dateFor(day ?? currentDay) }, set: {
                     day = Day.local(DiaryClock.millis($0), zone).iso
-                    showsRoutines = false
                 })
                 DatePicker("Work date", selection: date, in: ...dateFor(currentDay), displayedComponents: .date)
                     .labelsHidden()
@@ -89,12 +83,12 @@ struct DiaryPage: View {
                 }
             }
             Button {
-                showsRoutines.toggle()
+                setup = SetupTarget(project: project)
             } label: {
-                Label(showsRoutines ? "Back to diary" : "Project routines",
-                      systemImage: showsRoutines ? "chevron.left" : "clock")
+                Label("Set up diary…", systemImage: "gearshape")
             }
             .buttonStyle(.plain)
+            .disabled(snapshot.projects.isEmpty)
             .padding(.vertical, 6)
         }
         .padding(14)
@@ -103,10 +97,9 @@ struct DiaryPage: View {
     }
 
     private func dateButton(_ value: String) -> some View {
-        let selected = !showsRoutines && day == value
+        let selected = day == value
         return Button {
             day = value
-            showsRoutines = false
         } label: {
             HStack(spacing: 7) {
                 Text(dateFor(value), format: dateFormat(.dateTime.day()))
@@ -146,8 +139,10 @@ struct DiaryPage: View {
                 Text("Awaiting a diary entry").font(.title2.bold())
                 Text("No draft has arrived for \(project ?? client ?? "these projects") for this workday.")
                     .foregroundStyle(.secondary)
-                Button("Set up a project routine") { showsRoutines = true }
-                    .buttonStyle(.link)
+                Button(project.map { "Set up the \($0) diary" } ?? "Set up a project diary") {
+                    setup = SetupTarget(project: project)
+                }
+                .buttonStyle(.link)
             }
         } else {
             if pageData.entries.count == 1, let entry = pageData.entries.first {
@@ -307,6 +302,11 @@ struct DiaryPage: View {
             self.error = "Couldn’t load the diary. \(error.localizedDescription)"
         }
     }
+}
+
+private struct SetupTarget: Identifiable {
+    let id = UUID()
+    let project: String?
 }
 
 private struct DiaryEntryEditor: View {

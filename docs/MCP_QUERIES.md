@@ -603,7 +603,7 @@ Writing the queries first and then reading the code turned up these gaps. The fi
 
 ## Write a project diary
 
-Use the registration command in **Diary → Project routines**. It starts the same local stdio server with `--access=write --diary-project=ROUTINE_UUID`. This connection exposes only `get_diary_work` and `submit_diary_entry` for that project. The default read access offers only the first tool. Regular ledger connections cannot use these tools.
+Scheduled runs get this connection automatically. To connect an agent session yourself, use the registration command under **Diary → Set up diary… → Use your own agent session instead**. It starts the same local stdio server with `--access=write --diary-project=ROUTINE_UUID`. This connection exposes only `get_diary_work` and `submit_diary_entry` for that project. The default read access offers only the first tool. Regular ledger connections cannot use these tools.
 
 1. Call `get_diary_work` with an empty object. Read the project, the current `brief` and the returned `work`. If `work` is null, there is no due draft. Pass `work_date` only to intentionally backfill or refresh that date.
 2. Gather evidence from `start_inclusive` through `evidence_before` (exclusive). `end_exclusive` is the workday cutoff and can be later than the evidence cutoff on an early run. The draft contains the last agent entry and any user-edited fields.
@@ -625,4 +625,4 @@ Use the registration command in **Diary → Project routines**. It starts the sa
 
 Headline and summary are required. Additional sections can include their own `sources` array. Use labeled HTTP or HTTPS links. Each project and date has one draft. An exact retry leaves the revision unchanged. If another writer refreshed the draft first, fetch the current revision and interval before trying again. The app keeps personal edits separately and overlays them on the latest draft. An already-saved draft keeps its original workday window after a cutoff or time zone change.
 
-The schedule checks the oldest unfinished date starting with the day before the routine was first saved. A missed early run can go directly to a completed draft. The next check after a failed handoff retries after a 15-minute delay. For late evidence after a completed draft, refresh the specific work date.
+The schedule checks the oldest unfinished date starting with the day before the routine was first saved. A missed early run can go directly to a completed draft. The next check after a failed run retries after a 15-minute delay; **Write now** retries immediately. For late evidence after a completed draft, refresh the specific work date.

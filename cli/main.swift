@@ -52,14 +52,17 @@ if let status = MCP.run(arguments: arguments) {
 }
 
 if arguments.first == "diary-run" {
-    guard arguments.count == 7, let routine = UUID(uuidString: arguments[2]),
-          let agent = DiaryAgent(rawValue: arguments[3]), let session = UUID(uuidString: arguments[6]) else {
+    // diary-run DATABASE ROUTINE AGENT EXECUTABLE FOLDER [legacy conversation ID] [--force]
+    let force = arguments.contains("--force")
+    let values = arguments.filter { $0 != "--force" }
+    guard [6, 7].contains(values.count), let routine = UUID(uuidString: values[2]),
+          let agent = DiaryAgent(rawValue: values[3]) else {
         FileHandle.standardError.write(Data("tracker: invalid diary-run arguments\n".utf8))
         exit(2)
     }
     do {
-        try DiarySchedule.run(database: arguments[1], id: routine, conversation: .init(
-            agent: agent, executable: arguments[4], directory: arguments[5], session: session))
+        try DiarySchedule.run(database: values[1], id: routine,
+                              runner: .init(agent: agent, executable: values[4], directory: values[5]), force: force)
         exit(0)
     } catch {
         FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
