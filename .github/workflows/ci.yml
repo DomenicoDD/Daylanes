@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mac:
+    name: Build and Swift checks
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the app (free build, no payments or Calendar)
+        run: ./bin/build-desktop
+      - name: Swift checks
+        run: |
+          set -eu
+          out="$(mktemp -d)"
+          xcrun swiftc desktop/ChromeTabs.swift desktop/FocusRules.swift desktop/FocusSession.swift tests/FocusSessionChecks.swift -o "$out/focus"
+          "$out/focus"
+          xcrun swiftc -parse-as-library desktop/ReportBuilder.swift desktop/ReportCSV.swift desktop/ReportData.swift \
+            desktop/ReportOptions.swift desktop/ReportStrings.swift desktop/ReportPDF.swift tests/ReportChecks.swift -o "$out/reports"
+          "$out/reports"
+          for check in CoreChecks MCPChecks DiaryChecks; do
+            xcrun swiftc -parse-as-library core/*.swift "tests/$check.swift" -o "$out/$check"
+            "$out/$check"
+          done
+          xcrun swiftc -parse-as-library core/HTTP.swift desktop/GoogleCalendarAPI.swift desktop/GoogleCalendarAccountStore.swift \
+            desktop/GoogleCalendarCallback.swift tests/GoogleCalendarChecks.swift -o "$out/calendar"
+          "$out/calendar"
+
+  reference:
+    name: Python reference and checkout Worker tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: python3 -m unittest discover -s tests -v
+      - run: node --test server/checkout/tests/worker.test.mjs
+      - run: node --test chrome-integration/tests/context.test.mjs

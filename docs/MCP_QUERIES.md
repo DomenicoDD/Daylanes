@@ -1,6 +1,6 @@
-# Asking Tracker: example queries for agents
+# Asking Daylanes: example queries for agents
 
-This is a cookbook for an agent (Claude Code, Codex or any MCP client) connected to Tracker's local MCP server. Each entry is a question a person might ask, the tool calls that answer it, and the fields to read in the result.
+This is a cookbook for an agent (Claude Code, Codex or any MCP client) connected to Daylanes' local MCP server. Each entry is a question a person might ask, the tool calls that answer it, and the fields to read in the result.
 
 It covers the server in `core/MCP.swift`: the read tools, and the setup tools that `--access write` adds. Every call and field name below was checked against the Swift code (`core/MCPTools.swift` and the operations behind it). The queries were not run against a live ledger for this document, so the sample values are illustrative. Where today's server answers only part of a question, or none of it, the entry says so and points to the planned tool in [MCP_API_PLAN.md](MCP_API_PLAN.md).
 
@@ -53,12 +53,12 @@ The queries were chosen to cover these situations, which come from the use case 
 
 | | Case | Who asks | Queries |
 |---|---|---|---|
-| A | Orientation: the agent finds out what Tracker holds and which client it is working for | The agent itself, at the start of a session | 1 to 7 |
+| A | Orientation: the agent finds out what Daylanes holds and which client it is working for | The agent itself, at the start of a session | 1 to 7 |
 | B | Review: what happened today or this week, for the person and for each agent | The person, at the end of a day or week | 8 to 14 |
 | C | Cleanup: time and agent work with no project, rules that misfire, days with no tracking | The person, before billing | 15 to 20 |
 | D | Agent economics: tokens, API value, subscriptions, cost of a task, plan limits | The person, or an agent pacing itself | 21 to 29 |
 | E | Billing: what to invoice, why the amount is what it is, what blocks an invoice | The person, at month end | 30 to 38 |
-| F | Reconciliation: Tracker against an invoice, a client's count, Toggl or last month | The person, or a bookkeeping agent | 39 to 42 |
+| F | Reconciliation: Daylanes against an invoice, a client's count, Toggl or last month | The person, or a bookkeeping agent | 39 to 42 |
 | G | Setup and changes: create clients and projects, map folders, move a project; log, add a rule, snooze | The agent itself in a new repository, or the person | 43 to 47 (need `--access write`), 48 to 50 (not available yet) |
 
 ## 3. Queries
@@ -67,7 +67,7 @@ Calls are written as `tool_name { arguments }`. In MCP terms that is `tools/call
 
 ### A. Orientation
 
-#### 1. "Is Tracker running, and what does it know?"
+#### 1. "Is Daylanes running, and what does it know?"
 
 ```
 get_status {}
@@ -110,7 +110,7 @@ An agent can use this before a long run: on a `usage` or `hybrid` project, token
 resolve_context { "repo": "acme/shop", "pull_request": 42 }
 ```
 
-A routed pull request wins over the folder. `data.matched_by` is `pr_route` when a route decided it. `data.pull_request` gives `number`, `title`, `state`, `url` and `branch` when Tracker has the pull request cached.
+A routed pull request wins over the folder. `data.matched_by` is `pr_route` when a route decided it. `data.pull_request` gives `number`, `title`, `state`, `url` and `branch` when Daylanes has the pull request cached.
 
 Pass `folder` as well when the server was started somewhere else; without it the server's own working directory still takes part in the lookup.
 
@@ -121,7 +121,7 @@ resolve_context { "folder": "/Users/me/code/experiments" }
 list_projects {}
 ```
 
-When nothing matches, `data.project` is null, `data.matched_by` is `none` and `data.hint` says why. There are two hints: no project is mapped to the folder or its repository, or several projects share the repository and Tracker will not guess. `list_projects` then shows each project's `folders` and `github_repo`, so the agent can name the project the folder most likely belongs to.
+When nothing matches, `data.project` is null, `data.matched_by` is `none` and `data.hint` says why. There are two hints: no project is mapped to the folder or its repository, or several projects share the repository and Daylanes will not guess. `list_projects` then shows each project's `folders` and `github_repo`, so the agent can name the project the folder most likely belongs to.
 
 With write access the agent can set the project up itself; see query 43.
 
@@ -245,7 +245,7 @@ list_entries { "unassigned": true, "limit": 200 }
 list_rules {}
 ```
 
-`data.rules` holds the person's rules: `field` (`app`, `window`, `domain` or `url`), `keyword`, `app_scope`, `tag`, `project` and `chrome_profile`. Look for `field: "domain"` with a keyword that matches. `data.auto_rules` are the name rules Tracker makes by itself from project and client names, `data.auto_rules_off` lists the projects where the person turned those off, and `data.github_routes` holds the pull request routes.
+`data.rules` holds the person's rules: `field` (`app`, `window`, `domain` or `url`), `keyword`, `app_scope`, `tag`, `project` and `chrome_profile`. Look for `field: "domain"` with a keyword that matches. `data.auto_rules` are the name rules Daylanes makes by itself from project and client names, `data.auto_rules_off` lists the projects where the person turned those off, and `data.github_routes` holds the pull request routes.
 
 #### 19. "Why did this hour land on the wrong project?"
 
@@ -268,7 +268,7 @@ get_week { "day": "2026-11-16" }
 
 One call per week. A weekday whose `blocks` list is empty and whose `agent_runtime_millis` is 0 had no tracking. Compare with `data.tracking.last_activity_at` of `get_status` when the gap runs up to today.
 
-Tracker does not know about holidays or planned days off. The planned `find_gaps` tool will do this in one call.
+Daylanes does not know about holidays or planned days off. The planned `find_gaps` tool will do this in one call.
 
 ### D. Agent usage and cost
 
@@ -318,7 +318,7 @@ list_entries { "project": "Shop", "start": "2026-11-01", "end": "2026-12-01", "l
 
 `resolve_context` gives the project and the pull request's `branch`. In `list_entries`, keep the entries whose `github_pr` is 42, or whose `branch` equals that branch. Sum `millis` of the `human` and `runtime` entries and the token counts of the `usage` entries.
 
-This is a partial answer. Entries carry `github_pr` only when the project's repository is linked in Tracker, and the entries give tokens but no amount. For money, use the task id (query 24) when the branch has one. The planned `cost_of` tool answers this directly.
+This is a partial answer. Entries carry `github_pr` only when the project's repository is linked in Daylanes, and the entries give tokens but no amount. For money, use the task id (query 24) when the branch has one. The planned `cost_of` tool answers this directly.
 
 #### 26. "Which agent session used the most tokens today?"
 
@@ -336,7 +336,7 @@ usage_windows { "active_only": true }
 
 `data.blocks` has one open window per tool: `total_tokens`, `resets_in_minutes`, `burn_rate` (`tokens_per_minute`, `api_value_usd_per_hour`) and `projection` (`total_tokens` and `api_value_usd` at the end of the window if the pace holds). `data.plan_limits` holds what a tool itself reported about the plan: per window `used_percent`, `resets_at` and `resets_in_minutes`.
 
-Tracker knows the limit only when the tool reports it. Without `plan_limits` for a tool, give the pace and the reset time and say the limit itself is unknown. An agent can call this before a large job and wait for the reset when `used_percent` is high.
+Daylanes knows the limit only when the tool reports it. Without `plan_limits` for a tool, give the pace and the reset time and say the limit itself is unknown. An agent can call this before a large job and wait for the reset when `used_percent` is high.
 
 #### 28. "How heavy were my last three days, window by window?"
 
@@ -455,7 +455,7 @@ The cap is worked out over the whole calendar month, whatever dates the call ask
 
 ### F. Reconciliation
 
-#### 39. "The client says October was 41.5 hours. What does Tracker say?"
+#### 39. "The client says October was 41.5 hours. What does Daylanes say?"
 
 ```
 billing_summary { "start": "2026-10-01", "end": "2026-11-01" }
@@ -464,7 +464,7 @@ get_report { "client": "Acme", "start": "2026-10-01", "end": "2026-11-01" }
 
 Sum `hours` of the `you` lines for the client in `billing_summary`. When the two numbers differ, group the `you` rows of `get_report` by `date` and compare day by day with the client's list; `billed_millis` is the billed length of each session. The difference usually sits on a few days.
 
-#### 40. "Check this invoice against Tracker."
+#### 40. "Check this invoice against Daylanes."
 
 The person gives an invoice as a PDF or CSV. The agent reads it into rows of date, project, hours and amount, then:
 
@@ -472,17 +472,17 @@ The person gives an invoice as a PDF or CSV. The agent reads it into rows of dat
 get_report { "client": "Acme", "start": "2026-10-01", "end": "2026-11-01" }
 ```
 
-Match on `date` and `project`, then compare hours (`billed_millis / 3600000`) and `amount`. Report three lists: rows on the invoice with no match in Tracker, rows in Tracker missing from the invoice, and rows where the numbers differ. Compare the invoice total with `data.billing.clients[].total`, and remember `data.adjustments`.
+Match on `date` and `project`, then compare hours (`billed_millis / 3600000`) and `amount`. Report three lists: rows on the invoice with no match in Daylanes, rows in Daylanes missing from the invoice, and rows where the numbers differ. Compare the invoice total with `data.billing.clients[].total`, and remember `data.adjustments`.
 
-The matching is the agent's work today. The planned `reconcile` tool takes the parsed rows and does the matching inside Tracker, with tolerances.
+The matching is the agent's work today. The planned `reconcile` tool takes the parsed rows and does the matching inside Daylanes, with tolerances.
 
-#### 41. "Does Toggl agree with Tracker for last week?"
+#### 41. "Does Toggl agree with Daylanes for last week?"
 
 ```
 get_week { "day": "2026-11-11" }
 ```
 
-Each block has `time_source`: `toggl` for imported Toggl entries and `automatic` for Tracker's own. Per day, sum both and compare, and list the hours where one source has time and the other has none.
+Each block has `time_source`: `toggl` for imported Toggl entries and `automatic` for Daylanes' own. Per day, sum both and compare, and list the hours where one source has time and the other has none.
 
 This compares what was already imported. The server cannot fetch from Toggl; the import runs from the app.
 
