@@ -99,9 +99,9 @@ struct DiaryChecks {
                   && defaultBrief?.contains("notes, transcripts, or documented follow-ups") == true
                   && defaultBrief?.contains("Check that each blocker is still open") == true,
                   "a newly saved diary guides the writer on evidence, blockers and standup length")
-        let instruction = DiarySchedule.instruction(peerRoutine.id)
-        try check(instruction.contains(DiarySchedule.serverName(peerRoutine.id)) && instruction.contains("get_diary_work({})")
-                  && instruction.contains("submit_diary_entry") && instruction.contains("work_date, window, through, and revision")
+        let instruction = DiarySchedule.instruction()
+        try check(instruction.contains(DiarySchedule.server) && instruction.contains("get_diary_work({})")
+                  && instruction.contains("submit_diary_entry") && instruction.contains("work_date, window, through and revision")
                   && instruction.contains("data.brief"), "the standing instruction points to the scoped tools and the live brief")
         let badProject: JSON = .object([("project", .string(other))])
         try check(try call("get_diary_work", badProject, using: &writer)["result"]["isError"].boolValue == true,
@@ -165,17 +165,33 @@ struct DiaryChecks {
         let marker = root.appendingPathComponent("receipt")
         try "#!/bin/sh\nprintf '%s\\n' \"$@\" > receipt\n".write(to: fake, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fake.path)
-        let conversation = DiarySchedule.Conversation(agent: .codex, executable: fake.path, directory: root.path, session: UUID())
-        try DiarySchedule.run(database: path, id: routine.id, conversation: conversation, now: cutoff)
+        let runner = DiarySchedule.Runner(agent: .codex, executable: fake.path, directory: root.path)
+        let cli = "/path/to/TrackerCLI"
+        try DiarySchedule.run(database: path, id: routine.id, runner: runner, cli: cli, now: cutoff)
         try check(!FileManager.default.fileExists(atPath: marker.path), "scheduler is idle when nothing is due")
-        try DiarySchedule.run(database: path, id: routine.id, conversation: conversation, now: clock.instant(thursday, at: 615))
+        try DiarySchedule.run(database: path, id: routine.id, runner: runner, cli: cli, now: clock.instant(thursday, at: 615))
         let receipt = try String(contentsOf: marker, encoding: .utf8)
-        try check(receipt.contains("resume\n") && receipt.contains(conversation.session.uuidString.lowercased()), "due work resumes its exact local thread")
-        try check(try DiarySchedule.status(db, routine: routine.id)?.contains("didn’t save") == true, "failed handoff remains visible and pending")
-        let config = DiarySchedule.configuration(routine.id, database: path, cli: "/path/to/TrackerCLI",
-                                                  conversation: conversation)
-        try check(config["RunAtLoad"] as? Bool == true, "scheduler checks backlog on sign-in")
-        try check((config["StartCalendarInterval"] as? [[String: Int]])?.count == 60, "calendar checks coalesce on wake")
+        try check(receipt.hasPrefix("exec\n") && !receipt.contains("resume\n")
+                  && receipt.contains("mcp_servers.daylanes_diary.command=\"/path/to/TrackerCLI\"")
+                  && receipt.contains("\"--diary-project=\(routine.id.uuidString)\"")
+                  && receipt.contains("get_diary_work({})"), "due work starts a fresh run with the Diary server inline")
+        try check(try DiarySchedule.status(db, routine: routine.id)?.contains("without saving") == true, "failed handoff remains visible and pending")
+        try check(try DiarySchedule.lastAttempt(db, routine: routine.id)?.running != true, "a finished run is no longer marked running")
+        try FileManager.default.removeItem(at: marker)
+        try DiarySchedule.run(database: path, id: routine.id, runner: runner, cli: cli, now: clock.instant(thursday, at: 616))
+        try check(!FileManager.default.fileExists(atPath: marker.path), "a failed run pauses the schedule for 15 minutes")
+        try DiarySchedule.run(database: path, id: routine.id, runner: runner, cli: cli, force: true,
+                              now: clock.instant(thursday, at: 616))
+        try check(FileManager.default.fileExists(atPath: marker.path), "Run now skips the pause")
+
+        let claude = DiarySchedule.Runner(agent: .claude, executable: fake.path, directory: root.path)
+            .arguments(cli: cli, database: path, routine: routine.id)
+        let mcpConfig = try JSON.parse(claude[2])
+        try check(claude.first == "--print" && claude.contains("--allowedTools") && !claude.contains("--resume")
+                  && mcpConfig["mcpServers"]["daylanes_diary"]["command"].stringValue == cli,
+                  "Claude Code runs get the Diary server through --mcp-config")
+        let config = DiarySchedule.configuration(routine.id, database: path, cli: cli, runner: runner)
+        try check((config["ProgramArguments"] as? [String])?.count == 7, "the schedule needs no conversation ID")
         print("Diary checks passed")
     }
 }
