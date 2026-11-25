@@ -47,11 +47,13 @@ struct SheetFrame<Content: View, Leading: View>: View {
     /// The body's natural height, measured inside the scroll view so the sheet hugs short forms.
     @State private var contentHeight: CGFloat = 0
 
-    /// Room for the body once the header, footer and some margin are taken from the screen, so long forms scroll
-    /// instead of running off the bottom of the display.
+    /// Room for the body once the header, footer and some margin are taken from the window the sheet is attached
+    /// to (or the screen), so long forms scroll instead of running past the window's edge.
     private var maxContentHeight: CGFloat {
         let screen = NSScreen.main?.visibleFrame.height ?? 800
-        return max(240, screen - 260)
+        let parent = NSApp.windows.first { $0.attachedSheet != nil } ?? NSApp.mainWindow
+        let available = min(screen, parent?.frame.height ?? screen)
+        return max(200, available - 250)
     }
 
     init(title: String, dot: Color? = nil, chips: [String] = [], subtitle: String? = nil, monoSubtitle: Bool = false,

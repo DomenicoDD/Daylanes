@@ -27,6 +27,7 @@ struct DiarySetupSheet: View {
     @State private var error: String?
     @State private var copied = false
     @State private var mode: Mode = .prompt
+    @State private var editsBrief = false
 
     init(database: String, projects: [Project], project: String?, didChange: @escaping (String) -> Void) {
         self.database = database
@@ -110,20 +111,34 @@ struct DiarySetupSheet: View {
             }
         }
         SheetField(label: "Brief", note: "what to read and how to write") {
-            TextEditor(text: $routine.brief)
-                .font(.system(size: 13))
-                .scrollContentBackground(.hidden)
-                .padding(8)
-                .frame(height: 150)
-                .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(SheetTheme.border))
-                .accessibilityLabel("Diary brief")
-            if routine.brief != DiaryRoutine.briefTemplate {
-                Button("Restore the default brief") { routine.brief = DiaryRoutine.briefTemplate }
+            if editsBrief {
+                TextEditor(text: $routine.brief)
+                    .font(.system(size: 13))
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .frame(height: 130)
+                    .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(SheetTheme.border))
+                    .accessibilityLabel("Diary brief")
+            }
+            HStack(spacing: 8) {
+                if !editsBrief {
+                    Text(routine.brief == DiaryRoutine.briefTemplate ? "Default brief" : "Custom brief")
+                        .font(.system(size: 13)).foregroundStyle(Theme.text)
+                    Text(routine.brief.prefix(80).replacingOccurrences(of: "\n", with: " ") + "…")
+                        .font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+                        .lineLimit(1).truncationMode(.tail)
+                }
+                Spacer(minLength: 0)
+                if editsBrief, routine.brief != DiaryRoutine.briefTemplate {
+                    Button("Restore default") { routine.brief = DiaryRoutine.briefTemplate }
+                        .buttonStyle(SheetButtonStyle(kind: .link))
+                }
+                Button(editsBrief ? "Done" : "Edit…") { editsBrief.toggle() }
                     .buttonStyle(SheetButtonStyle(kind: .link))
             }
         }
-        Divider().overlay(SheetTheme.footerLine).padding(.vertical, 2)
+        Divider().overlay(SheetTheme.footerLine)
         Text("Follow these steps").font(.system(size: 13, weight: .semibold))
         VStack(alignment: .leading, spacing: 0) {
             switch mode {
@@ -145,17 +160,15 @@ struct DiarySetupSheet: View {
                 let selected = option == mode
                 if index > 0 { Rectangle().fill(SheetTheme.border).frame(width: 1) }
                 Button { mode = option } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: option.icon).font(.system(size: 14))
-                            .foregroundStyle(selected ? Theme.text : SheetTheme.muted)
-                            .frame(height: 18)
-                        Text(option.title).font(.system(size: 13, weight: .semibold))
+                    VStack(spacing: 2) {
+                        Label(option.title, systemImage: option.icon)
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(selected ? Theme.text : SheetTheme.label)
                         Text(option.detail).font(.system(size: 11))
                             .foregroundStyle(SheetTheme.muted)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 8)
                     .background(selected ? SheetTheme.fieldFocused : .clear,
                                 in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -196,7 +209,7 @@ struct DiarySetupSheet: View {
                 content()
             }
             .padding(.top, 2)
-            .padding(.bottom, last ? 0 : 18)
+            .padding(.bottom, last ? 0 : 14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         // Lets the connecting line fill the step's height.
@@ -287,6 +300,23 @@ struct DiarySetupSheet: View {
         }
     }
 
+    /// A long command or instruction on one line, with a Copy button: the full text is selectable and copied whole.
+    private func copyRow(_ value: String) -> some View {
+        HStack(spacing: 8) {
+            Text(verbatim: value.replacingOccurrences(of: " \\\n  ", with: " ").replacingOccurrences(of: "\n", with: " "))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1).truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help(value)
+            CommandCopyButton(command: value)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(SheetTheme.border))
+    }
+
     private var dailyRunLabel: String {
         let minutes = (try? DiaryClock.minutes(cutoff)) ?? 300
         return DiaryClock.label((minutes + 5) % (24 * 60))
@@ -344,12 +374,12 @@ struct DiarySetupSheet: View {
         let command = AgentMCPCommand(executable: cli, database: database, diaryRoutine: saved.id)
         let prefix = routine.agent == .codex ? "codex mcp add \(name)" : "claude mcp add --scope user --transport stdio \(name)"
         step(2, "Register the connection", "Run this once in Terminal. It connects \(routine.agent.title) to this project’s diary.") {
-            SetupCodeBlock(title: "Registration command", values: [command.registration(using: prefix)])
+            copyRow(command.registration(using: prefix))
         }
         step(3, "Ask for an entry",
              "Send this from any \(routine.agent.title) conversation that should write the diary. If no workday is due, it writes the latest one.",
              last: true) {
-            SetupCodeBlock(title: "Instruction", values: [DiarySchedule.instruction(server: name, manual: true)])
+            copyRow(DiarySchedule.instruction(server: name, manual: true))
         }
     }
 
