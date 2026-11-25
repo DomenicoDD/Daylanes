@@ -1,4 +1,31 @@
-# Daylanes
+<p align="center">
+  <img src="assets/icon/AppIcon-1024.png" width="128" height="128" alt="Daylanes app icon">
+</p>
+
+<h1 align="center">Daylanes</h1>
+
+<p align="center"><b>Open-source macOS time tracking for you and your AI agents.</b><br>
+Your day in parallel lanes: the apps you use, every Codex and Claude Code thread, and what it all bills.</p>
+
+<h2 align="center">
+  <a href="https://daylanes.app">daylanes.app</a> &nbsp;·&nbsp; <a href="https://daylanes.app/download">Download for Mac</a>
+</h2>
+
+<p align="center">
+  <a href="https://daylanes.app/download"><img src="https://img.shields.io/badge/Download_for_Mac-macOS_14%2B-111111?style=for-the-badge&logo=apple&logoColor=white" alt="Download Daylanes for Mac"></a>
+  <a href="https://daylanes.app"><img src="https://img.shields.io/badge/Website-daylanes.app-5B5BD6?style=for-the-badge" alt="Visit daylanes.app"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2AC561?style=for-the-badge" alt="MIT License"></a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/timeline.png" alt="Daylanes Timeline: your time and each agent thread side by side, with billing columns" width="900">
+</p>
+
+| Overview | Diary | Review |
+|---|---|---|
+| <img src="docs/screenshots/overview.png" alt="Overview: this week's time, agents, expenses and API value"> | <img src="docs/screenshots/diary.png" alt="Diary: a daily work log your agents write"> | <img src="docs/screenshots/review.png" alt="Review: assign unassigned agent runs to a project"> |
+
+<sub>Screenshots use the sample data from the demo on daylanes.app.</sub>
 
 Daylanes is a local Mac app, CLI, and MCP server for consultant time, agent usage, and costs. It reads the history of Codex, Claude Code, OpenCode and 17 other coding agents on the Mac and stores the reporting metadata in SQLite.
 
@@ -184,7 +211,7 @@ See [the Diary MCP contract](docs/MCP_QUERIES.md#write-a-project-diary) for payl
 
 ## Automatic human time
 
-Tracking is always on once you choose **Start tracking** on the welcome screen. There is no pause: to step away, click the tracking pill or the clock in the menu bar and choose **Snooze** for 15, 30, 60 or 120 minutes or until tomorrow. A countdown shows how long is left, and tracking resumes by itself; **Resume** ends a snooze early. To leave an app, window or site out for good, add a **Do Not Track** rule. Close the window to leave Daylanes running in the menu bar. For startup at login, choose **Settings → General → Open at login**. macOS manages that preference under Login Items. [Apple Login Items API](https://developer.apple.com/documentation/servicemanagement/smappservice)
+Tracking is always on once you choose **Start tracking** on the welcome screen. There is no pause: to step away, click the tracking pill or the Daylanes icon in the menu bar and choose **Snooze** for 15, 30, 60 or 120 minutes or until tomorrow. A countdown shows how long is left, and tracking resumes by itself; **Resume** ends a snooze early. To leave an app, window or site out for good, add a **Do Not Track** rule. Close the window to leave Daylanes running in the menu bar. Its icon is solid while tracking, faded when idle and outlined while snoozed; click it for a quick glance at today: total time, agent runtime, time per project, the usage window and quick assign. For startup at login, choose **Settings → General → Open at login**. macOS manages that preference under Login Items. [Apple Login Items API](https://developer.apple.com/documentation/servicemanagement/smappservice)
 
 Daylanes records time in the foreground app and closes the current block after two minutes without input. It starts a fresh block when you return and pauses for sleep and inactive login sessions. The idle threshold can include brief periods away or undercount stretches of reading.
 
