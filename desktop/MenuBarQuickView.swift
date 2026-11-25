@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// The icon Tracker shows in the macOS menu bar. It changes with the tracking state, so a
-/// glance at the menu bar says whether time is being recorded.
+/// The Daylanes logo in the macOS menu bar. It changes with the tracking state, so a glance at the
+/// menu bar says whether time is being recorded: solid while tracking, faded when idle or away,
+/// outlined while snoozed.
 struct MenuBarLabel: View {
     @ObservedObject var recorder: FocusRecorder
     #if TRACKER_PAYMENTS
@@ -10,26 +11,34 @@ struct MenuBarLabel: View {
     #endif
 
     var body: some View {
-        Image(systemName: symbol)
-            .accessibilityLabel(label)
+        Group {
+            if locked {
+                Image(systemName: "lock.fill")
+            } else {
+                Image(nsImage: MenuBarIcon.image(style))
+            }
+        }
+        .accessibilityLabel(label)
+    }
+
+    private var locked: Bool {
+        #if TRACKER_PAYMENTS
+        return licensing.isLocked
+        #else
+        return false
+        #endif
     }
 
     private var label: String {
-        #if TRACKER_PAYMENTS
-        if licensing.isLocked { return "Daylanes, trial ended" }
-        #endif
+        if locked { return "Daylanes, trial ended" }
         return "Daylanes, \(TrackingStatusText.label(recorder, now: Date()))"
     }
 
-    private var symbol: String {
-        #if TRACKER_PAYMENTS
-        if licensing.isLocked { return "lock.fill" }
-        #endif
-        guard recorder.enabled else { return "moon.zzz.fill" }
+    private var style: MenuBarIcon.Style {
+        guard recorder.enabled else { return .outlined }
         switch recorder.status {
-        case .recording, .waiting: return "timer"
-        case .idle, .away: return "moon.zzz"
-        case .paused: return "pause.circle"
+        case .recording, .waiting: return .active
+        case .idle, .away, .paused: return .dimmed
         }
     }
 }
@@ -51,8 +60,12 @@ struct MenuBarQuickView: View {
     @State private var error: String?
     @State private var saving = false
     @State private var visible = false
+    /// Natural height of the popover's middle section. A bare ScrollView has no height of its own in a
+    /// menu bar window, so it collapsed to nothing and only the header and footer showed.
+    @State private var contentHeight: CGFloat = 0
 
     private static let width: CGFloat = 340
+    private static let maxContentHeight: CGFloat = 460
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -60,6 +73,7 @@ struct MenuBarQuickView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    glance
                     current
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle")
@@ -71,8 +85,16 @@ struct MenuBarQuickView: View {
                     usageWindows
                 }
                 .padding(14)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { contentHeight = proxy.size.height }
+                            .onChange(of: proxy.size.height) { _, height in contentHeight = height }
+                    }
+                }
             }
-            .frame(maxHeight: 420)
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: min(max(contentHeight, 60), Self.maxContentHeight))
             Divider()
             footer
         }
@@ -130,6 +152,52 @@ struct MenuBarQuickView: View {
         guard recorder.enabled else { return "Start to record the apps you use" }
         if case .waiting = recorder.status { return "Tracking the app you return to" }
         return recorder.status.label
+    }
+
+    // MARK: Quick glance
+
+    /// Today's tracked time at a glance: the total, agent runtime, and a bar split by project.
+    @ViewBuilder
+    private var glance: some View {
+        if day != nil {
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                let rows = projectTimes(now: context.date)
+                let total = rows.reduce(0) { $0 + $1.seconds }
+                let agentSeconds = agentTimes.reduce(0) { $0 + $1.millis } / 1000
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .lastTextBaseline) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Today").font(.caption).foregroundStyle(.secondary)
+                            Text(total > 0 ? duration(total) : "0 h")
+                                .font(.system(size: 26, weight: .semibold, design: .rounded).monospacedDigit())
+                        }
+                        Spacer()
+                        if agentSeconds > 0 {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text("Agents").font(.caption).foregroundStyle(.secondary)
+                                Text(duration(agentSeconds))
+                                    .font(.system(size: 17, weight: .medium, design: .rounded).monospacedDigit())
+                                    .foregroundStyle(.purple)
+                            }
+                        }
+                    }
+                    if total > 0 {
+                        GeometryReader { proxy in
+                            let gaps = CGFloat(rows.count - 1) * 2
+                            HStack(spacing: 2) {
+                                ForEach(rows) { row in
+                                    Capsule()
+                                        .fill(row.project == nil ? Color.orange : ProjectColor.color(for: row.project))
+                                        .frame(width: max(2, (proxy.size.width - gaps) * row.seconds / total))
+                                }
+                            }
+                        }
+                        .frame(height: 6)
+                        .help(rows.map { "\($0.project ?? "Unassigned") \(duration($0.seconds))" }.joined(separator: " · "))
+                    }
+                }
+            }
+        }
     }
 
     // MARK: Current activity
@@ -245,11 +313,7 @@ struct MenuBarQuickView: View {
                 let rows = projectTimes(now: context.date)
                 let total = rows.reduce(0) { $0 + $1.seconds }
                 VStack(alignment: .leading, spacing: 7) {
-                    HStack {
-                        Text("Today").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Text(duration(total)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    }
+                    Text("By project").font(.caption).foregroundStyle(.secondary)
                     if rows.isEmpty {
                         Text("No project time yet.").font(.callout).foregroundStyle(.secondary)
                     }
