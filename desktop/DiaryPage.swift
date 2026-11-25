@@ -263,7 +263,10 @@ struct DiaryPage: View {
     private func quietRange(from: String, to: String) -> String {
         let style = dateFormat(.dateTime.day().month(.abbreviated))
         if from == to { return dateFor(from).formatted(style) }
-        return dateFor(from).formatted(dateFormat(.dateTime.day())) + "–" + dateFor(to).formatted(style)
+        // ISO days: the same "YYYY-MM" prefix means the same month, so the start can drop it.
+        let start = from.prefix(7) == to.prefix(7) ? dateFor(from).formatted(dateFormat(.dateTime.day()))
+            : dateFor(from).formatted(from.prefix(4) == to.prefix(4) ? style : dateFormat(.dateTime.day().month(.abbreviated).year()))
+        return start + "–" + dateFor(to).formatted(from.prefix(4) == to.prefix(4) ? style : dateFormat(.dateTime.day().month(.abbreviated).year()))
     }
 
     private func tag(_ text: String, tint: Theme.Tint) -> some View {
@@ -435,7 +438,8 @@ struct DiaryPage: View {
         Link(destination: source.url) {
             HStack(spacing: 4) {
                 Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
-                Text(source.title).lineLimit(1)
+                // FlowLayout measures chips at their ideal width, so shorten long titles here; the full one is in the tooltip.
+                Text(source.title.count > 48 ? String(source.title.prefix(47)) + "…" : source.title).lineLimit(1)
             }
             .font(.caption.weight(.medium))
             .foregroundStyle(Theme.text.opacity(0.8))
@@ -444,7 +448,7 @@ struct DiaryPage: View {
             .background(Theme.block, in: Capsule())
         }
         .buttonStyle(.plain)
-        .help(source.url.absoluteString)
+        .help(source.title + "\n" + source.url.absoluteString)
     }
 
     // MARK: Data
