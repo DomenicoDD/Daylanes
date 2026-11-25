@@ -202,11 +202,11 @@ struct DiaryPage: View {
         switch row {
         case let .day(day, entries):
             VStack(alignment: .leading, spacing: 3) {
-                Text(dateFor(day), format: dateFormat(.dateTime.day().month(.abbreviated)))
+                Text(dateFor(day).formatted(dateFormat(.dateTime.day().month(.abbreviated))))
                     .font(.system(size: 15, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
-                Text(dateFor(day), format: dateFormat(.dateTime.weekday(.wide)))
+                Text(dateFor(day).formatted(dateFormat(.dateTime.weekday(.wide))))
                     .font(.caption)
                     .foregroundStyle(Theme.secondary)
                 if day == currentDay {
@@ -234,10 +234,12 @@ struct DiaryPage: View {
     private func quietRange(from: String, to: String) -> String {
         let style = dateFormat(.dateTime.day().month(.abbreviated))
         if from == to { return dateFor(from).formatted(style) }
-        // ISO days: the same "YYYY-MM" prefix means the same month, so the start can drop it.
-        let start = from.prefix(7) == to.prefix(7) ? dateFor(from).formatted(dateFormat(.dateTime.day()))
-            : dateFor(from).formatted(from.prefix(4) == to.prefix(4) ? style : dateFormat(.dateTime.day().month(.abbreviated).year()))
-        return start + "–" + dateFor(to).formatted(from.prefix(4) == to.prefix(4) ? style : dateFormat(.dateTime.day().month(.abbreviated).year()))
+        // Month first, so within one month the end drops it: "Nov 12–23". ISO days share a "YYYY-MM" prefix then.
+        if from.prefix(7) == to.prefix(7) {
+            return dateFor(from).formatted(style) + "–" + dateFor(to).formatted(dateFormat(.dateTime.day()))
+        }
+        let full = from.prefix(4) == to.prefix(4) ? style : dateFormat(.dateTime.day().month(.abbreviated).year())
+        return dateFor(from).formatted(full) + " – " + dateFor(to).formatted(full)
     }
 
     private func rail(_ row: DiaryTimeline.Row, last: Bool) -> some View {
