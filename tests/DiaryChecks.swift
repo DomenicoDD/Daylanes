@@ -34,6 +34,17 @@ struct DiaryChecks {
                   && skipped.start == clock.window(first).start - 2 * 3_600_000,
                   "ambiguous cutoff uses its first occurrence and skipped cutoff uses next valid wall time")
 
+        let evening = DiaryClock(zone: rome, cutoff: 23 * 60)
+        let lateWindow = evening.window(wednesday)
+        try check(evening.namesByEnd && lateWindow.start == DiaryClock.millis(evening.instant(tuesday, at: 1380))
+                  && lateWindow.end == DiaryClock.millis(evening.instant(wednesday, at: 1380))
+                  && evening.workday(evening.instant(wednesday, at: 600)) == wednesday
+                  && evening.workday(evening.instant(wednesday, at: 1380)) == thursday,
+                  "a late cutoff names the workday after the day it ends on")
+        try check(DiaryGuide.workday(evening).contains("Monday 23:00 to Tuesday 23:00")
+                  && DiaryGuide.dailyRun(evening) == "23:05" && DiaryGuide.dailyRun(clock) == "05:05",
+                  "the guide explains the naming and suggests a run just after the cutoff")
+
         let project = "Orchard"
         let peer = "Seedlings"
         let other = "Beacon"
@@ -200,6 +211,9 @@ struct DiaryChecks {
                   "Claude Code runs get the Diary server through --mcp-config")
         let config = DiarySchedule.configuration(routine.id, database: path, cli: cli, runner: runner)
         try check((config["ProgramArguments"] as? [String])?.count == 7, "the schedule needs no conversation ID")
+        try check(claude.contains { $0.contains("Bash(gh pr view:*)") && $0.contains("Bash(git log:*)") }
+                  && !claude.contains { $0.contains("Bash(gh api") },
+                  "scheduled Claude Code runs may read Git and GitHub, but not write through gh api")
         let prompt = DiaryGuide.prompt(project: project, routine: routine.id, cli: "/Apps/Day lanes/TrackerCLI", database: path)
         try check(prompt.contains("'/Apps/Day lanes/TrackerCLI' --db '\(path)' diary guide \(routine.id.uuidString.lowercased())"),
                   "the copied prompt runs the guide for this ledger and routine")
@@ -226,6 +240,26 @@ struct DiaryChecks {
         try check(hello["result"]["instructions"].stringValue?.contains(routine.brief) == true
                   && hello["result"]["instructions"].stringValue?.contains("submit_diary_entry") == true,
                   "a Diary MCP connection introduces itself with the guide and brief")
+        try check(guide.contains("## Running it every day") && guide.contains("`gh`") && guide.contains("05:05"),
+                  "the guide explains scheduling and the access an unattended run needs")
+
+        // Entries saved under a late cutoff before workdays were named by their end move to that day.
+        let lateProject = "Lanterns"
+        try Store.createProject(db, name: lateProject, client: "Example Studio", kind: "billable", folder: nil)
+        for day in [tuesday, wednesday] {
+            try db.execute("INSERT INTO diary_entries (project, work_date, window, through, revision, content) VALUES (?, ?, ?, ?, 1, ?)",
+                           [lateProject, day.iso, try DiaryStore.encode(DiaryWindow(
+                               start: DiaryClock.millis(evening.instant(day, at: 1380)),
+                               end: DiaryClock.millis(evening.instant(day.adding(days: 1), at: 1380)), timezone: rome.identifier)),
+                            0, try DiaryStore.encode(DiaryContent(headline: day.iso, summary: "Late."))])
+        }
+        try DiaryStore.renameLateWorkdays(db)
+        try DiaryStore.renameLateWorkdays(db)
+        try check(try DiaryStore.entry(db, project: lateProject, day: thursday.iso)?.content.headline == wednesday.iso
+                  && DiaryStore.entry(db, project: lateProject, day: wednesday.iso)?.content.headline == tuesday.iso
+                  && DiaryStore.entry(db, project: lateProject, day: tuesday.iso) == nil
+                  && DiaryStore.entry(db, project: project, day: tuesday.iso) != nil,
+                  "late-cutoff entries move once to the day they end on, early ones stay")
         print("Diary checks passed")
     }
 }

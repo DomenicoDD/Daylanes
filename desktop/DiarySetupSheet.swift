@@ -110,6 +110,8 @@ struct DiarySetupSheet: View {
         SheetField(label: "Written by") {
             SheetSegments(selection: $routine.agent, options: DiaryAgent.allCases.map { ($0, $0.title) })
             agentLine
+            Text(accessNote).font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         SheetField(label: "When") {
             SheetSegments(selection: $setTime, options: [(false, "When the workday ends"), (true, "At a set time")])
@@ -133,7 +135,7 @@ struct DiarySetupSheet: View {
                             SheetTextField(placeholder: "Europe/Rome", text: $zone)
                         }
                     }
-                    Text("Applies to every diary. Work after midnight and before this time counts toward the previous day.")
+                    Text(workdayNote)
                         .font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
                 }
             }
@@ -221,6 +223,23 @@ struct DiarySetupSheet: View {
             SetupCodeBlock(title: "Registration command", values: [command.registration(using: prefix)])
             SetupCodeBlock(title: "Instruction", values: [DiarySchedule.instruction(server: name)])
         }
+    }
+
+    /// Scheduled runs can't ask for permission, so say what they can read on their own.
+    private var accessNote: String {
+        switch routine.agent {
+        case .claude:
+            "Runs on its own, so it can read the folder, Git and GitHub (gh) but nothing that needs approval. To use Linear, Slack or your calendar, allow those connectors in Claude Code’s settings."
+        case .codex:
+            "Runs on its own in Codex’s read-only sandbox, which has no network for gh. Add GitHub, Linear or your calendar as connectors in Codex so the entry isn’t written from Git alone."
+        }
+    }
+
+    private var workdayNote: String {
+        let late = ((try? DiaryClock.minutes(cutoff)) ?? 0) >= 12 * 60
+        return late
+            ? "Applies to every diary. Work after this time counts toward the next day, so each workday is named after the day it ends on."
+            : "Applies to every diary. Work after midnight and before this time counts toward the previous day."
     }
 
     private var timing: String {

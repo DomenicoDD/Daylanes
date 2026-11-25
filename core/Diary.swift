@@ -22,8 +22,15 @@ struct DiaryClock: Equatable, Sendable {
 
     func calendarDay(_ date: Date) -> Day { Day.local(Self.millis(date), zone) }
 
+    /// A workday is named after the calendar day it mostly covers. With an early cutoff (before noon, such as
+    /// 05:00) that is the day it starts on, so work done after midnight counts toward the previous day. With a
+    /// late cutoff (noon or later, such as 23:00) it is the day it ends on, so work after the cutoff counts
+    /// toward the next day.
+    var namesByEnd: Bool { cutoff >= 12 * 60 }
+
     func workday(_ date: Date) -> Day {
         let day = calendarDay(date)
+        if namesByEnd { return date < instant(day, at: cutoff) ? day : day.adding(days: 1) }
         return date < instant(day, at: cutoff) ? day.adding(days: -1) : day
     }
 
@@ -37,9 +44,13 @@ struct DiaryClock: Equatable, Sendable {
     }
 
     func window(_ day: Day) -> DiaryWindow {
-        DiaryWindow(start: Self.millis(instant(day, at: cutoff)),
-                    end: Self.millis(instant(day.adding(days: 1), at: cutoff)), timezone: zone.identifier)
+        let first = namesByEnd ? day.adding(days: -1) : day
+        return DiaryWindow(start: Self.millis(instant(first, at: cutoff)),
+                           end: Self.millis(instant(first.adding(days: 1), at: cutoff)), timezone: zone.identifier)
     }
+
+    /// The calendar day a workday ends on, when a run time on that day falls.
+    func endDay(_ day: Day) -> Day { namesByEnd ? day : day.adding(days: 1) }
 
     static func millis(_ date: Date) -> Int { Int((date.timeIntervalSince1970 * 1000).rounded(.down)) }
     static func date(_ millis: Int) -> Date { Date(timeIntervalSince1970: Double(millis) / 1000) }
@@ -240,6 +251,33 @@ enum DiaryStore {
         try Store.setSetting(db, "diary_cutoff", DiaryClock.label(clock.cutoff))
     }
 
+    /// Entries written before late cutoffs were named by the day they end on carry the day they start on, such
+    /// as "Nov 24" for 24 Nov 23:00 to 25 Nov 23:00. Renames them to the day they mostly cover. Safe to run on
+    /// every open: a renamed entry no longer starts on its own date.
+    static func renameLateWorkdays(_ db: Database) throws {
+        let rows = try db.query("SELECT project, work_date, window FROM diary_entries ORDER BY work_date DESC")
+        var renames: [(project: String, from: String, to: String)] = []
+        for row in rows {
+            guard let project = row["project"].string, let key = row["work_date"].string,
+                  let day = try? Day.parse(key),
+                  let window = try? decode(DiaryWindow.self, row["window"].string),
+                  let zone = TimeZone(identifier: window.timezone) else { continue }
+            let start = DiaryClock.date(window.start)
+            let parts = TimeZones.calendar(zone).dateComponents([.hour], from: start)
+            guard Day.local(window.start, zone) == day, (parts.hour ?? 0) >= 12 else { continue }
+            renames.append((project, key, day.adding(days: 1).iso))
+        }
+        guard !renames.isEmpty else { return }
+        try db.transaction {
+            for rename in renames {
+                guard try db.first("SELECT 1 FROM diary_entries WHERE project = ? AND work_date = ?",
+                                   [rename.project, rename.to]) == nil else { continue }
+                try db.execute("UPDATE diary_entries SET work_date = ? WHERE project = ? AND work_date = ?",
+                               [rename.to, rename.project, rename.from])
+            }
+        }
+    }
+
     static func routine(_ db: Database, project: String) throws -> DiaryRoutine? {
         guard let row = try db.first("SELECT * FROM diary_routines WHERE project = ?", [project]) else { return nil }
         return try decode(DiaryRoutine.self, row["profile"].string)
@@ -312,7 +350,9 @@ enum DiaryStore {
             return Work(day: day, window: window, through: min(stamp, window.end), draft: draft)
         }
         if let requested { return try workFor(requested) }
-        let last = clock.calendarDay(now).adding(days: -1)
+        // The newest workday that may have started a scheduled run: yesterday, or today when days are named
+        // by the day they end on.
+        let last = clock.namesByEnd ? clock.calendarDay(now) : clock.calendarDay(now).adding(days: -1)
         guard first <= last else { return nil }
         let complete = Set(try db.query("""
             SELECT work_date FROM diary_entries WHERE project = ? AND work_date BETWEEN ? AND ?
@@ -322,10 +362,10 @@ enum DiaryStore {
             let day = Day(ordinal: ordinal)
             if complete.contains(day.iso) { continue }
             guard let work = try workFor(day) else { continue }
-            let next = day.adding(days: 1)
             // An existing draft keeps its original boundary even if the diary clock was changed.
             let zone = TimeZone(identifier: work.window.timezone) ?? clock.zone
             let runClock = DiaryClock(zone: zone, cutoff: clock.cutoff)
+            let next = runClock.endDay(day)
             let scheduled = routine.runMinute.map { DiaryClock.millis(runClock.instant(next, at: $0)) } ?? work.window.end
             if stamp >= max(scheduled, work.window.end) { return work }
             if stamp >= scheduled, stamp < work.window.end, work.draft == nil { return work }

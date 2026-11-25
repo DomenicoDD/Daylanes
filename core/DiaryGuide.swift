@@ -29,7 +29,24 @@ enum DiaryGuide {
         case mcp
     }
 
-    static func text(project: String, client: String?, brief: String, channel: Channel) -> String {
+    /// How workdays are named and when one is due, in the person's own cutoff and time zone.
+    static func workday(_ clock: DiaryClock) -> String {
+        let cutoff = DiaryClock.label(clock.cutoff)
+        let naming = clock.namesByEnd
+            ? "work after \(cutoff) counts toward the next day, so the entry dated Tuesday covers Monday \(cutoff) to Tuesday \(cutoff)"
+            : "work after midnight and before \(cutoff) counts toward the previous day, so the entry dated Tuesday covers Tuesday \(cutoff) to Wednesday \(cutoff)"
+        return """
+            Workdays end at \(cutoff) (\(clock.zone.identifier)). Each one is named after the calendar day it \
+            mostly covers: \(naming). A workday is due once it has ended, so a run just before \(cutoff) writes \
+            the previous workday, not the one in progress.
+            """
+    }
+
+    /// When a recurring run should start: five minutes after the workday ends.
+    static func dailyRun(_ clock: DiaryClock) -> String { DiaryClock.label((clock.cutoff + 5) % (24 * 60)) }
+
+    static func text(project: String, client: String?, brief: String, channel: Channel,
+                     clock: DiaryClock = DiaryClock(zone: .current, cutoff: 300)) -> String {
         let read: String
         let save: String
         // MCP tools wrap results in `data`; the CLI prints the operation's result as is.
@@ -72,7 +89,12 @@ enum DiaryGuide {
             starting over.
             4. Save it: copy `work_date`, `window`, `through` and `revision` exactly from `\(root)work`, put your \
             writing in `entry`, and \(save)
-            5. Read the due workday again. Repeat for up to seven missed workdays, then report what you wrote.
+            5. Read the due workday again. Repeat for up to seven missed workdays, then report what you wrote and \
+            name any source you couldn't reach, so the person knows the entry is missing it.
+
+            ## The workday
+
+            \(workday(clock))
 
             ## The entry
 
@@ -93,6 +115,23 @@ enum DiaryGuide {
             If you find no activity for the day, save a short quiet-day entry so the next day can follow. If a \
             source you need is unavailable or saving fails, stop and say what needs attention. Don't retry with \
             made-up values: a conflict means the draft changed, so read the workday again first.
+
+            ## Running it every day
+
+            Skip this when you are already running on a schedule. If the person wants the diary written every \
+            day, offer two ways and set up the one they choose:
+
+            - **Daylanes runs it.** In Daylanes, open the Diary, choose “Set up diary…”, and pick Codex or Claude Code under \
+            “Or let Daylanes write it every day”.
+            - **You run it.** Create a recurring task in your own tool that starts every day at \
+            \(dailyRun(clock)) (\(clock.zone.identifier)), just after the workday ends, and sends the same prompt \
+            the person gave you.
+
+            Either way, an unattended run can only use what it is allowed to use without asking. Before you finish, \
+            make sure it can read the sources you used now: `git` in the project's folders, `gh` for pull requests \
+            and reviews, and connectors such as Linear, Slack, the calendar and meeting notes. Approve them for that \
+            task, or tell the person which ones to approve and where. Without them, entries are written from Git \
+            history alone. Then tell the person when the run starts and which sources it can reach.
 
             ## Brief for \(project)
 
@@ -121,7 +160,8 @@ enum DiaryCLI {
                 let client = try Store.project(db, project)["client"].string
                 return (0, DiaryGuide.text(project: project, client: client, brief: saved.brief,
                                            channel: .cli(prefix: DiaryGuide.command(cli: cli, database: database),
-                                                         routine: routine)))
+                                                         routine: routine),
+                                           clock: try DiaryStore.clock(db)))
             case "work":
                 var params: [(String, JSON)] = [("routine_id", .string(routine.uuidString))]
                 switch Array(arguments.dropFirst(2)) {

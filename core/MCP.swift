@@ -108,7 +108,8 @@ enum MCP {
                    let project = try? DiaryStore.project(db, routine: routine),
                    let saved = try? DiaryStore.routine(db, project: project) {
                     diaryGuide = DiaryGuide.text(project: project, client: try? Store.project(db, project)["client"].string,
-                                                 brief: saved.brief, channel: .mcp)
+                                                 brief: saved.brief, channel: .mcp,
+                                                 clock: (try? DiaryStore.clock(db)) ?? DiaryClock(zone: .current, cutoff: 300))
                 }
                 return MCP.success(id: id, .object([
                     ("protocolVersion", .string(version)),

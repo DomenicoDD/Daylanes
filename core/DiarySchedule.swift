@@ -26,12 +26,23 @@ enum DiarySchedule {
                 let config = JSON.object([("mcpServers", .object([(DiarySchedule.server, .object([
                     ("type", .string("stdio")), ("command", .string(cli)), ("args", JSON.strings(Array(server.dropFirst()))),
                 ]))]))])
+                // A print run can't ask for permission, so allow the read-only evidence it needs: the folder, Git
+                // history and GitHub. Other connectors follow the person's own Claude Code permission settings.
                 let tools = ["get_diary_work", "submit_diary_entry"].map { "mcp__\(DiarySchedule.server)__\($0)" }
+                    + DiarySchedule.claudeEvidenceTools
                 return ["--print", "--mcp-config", config.pythonText(indent: nil),
                         "--allowedTools", tools.joined(separator: ","), "--", prompt]
             }
         }
     }
+
+    /// Read-only tools a scheduled Claude Code run may use without asking.
+    static let claudeEvidenceTools = [
+        "Read", "Grep", "Glob",
+        "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)", "Bash(git branch:*)",
+        "Bash(gh pr list:*)", "Bash(gh pr view:*)", "Bash(gh pr diff:*)", "Bash(gh pr checks:*)",
+        "Bash(gh issue list:*)", "Bash(gh issue view:*)", "Bash(gh search:*)",
+    ]
 
     /// The MCP server name each run gives the Diary connection.
     static let server = "daylanes_diary"
@@ -44,7 +55,8 @@ enum DiarySchedule {
     static func instruction(server: String = server) -> String {
         """
         Write the Daylanes Diary for this project. Use the two tools on the \(server) MCP server, and your other \
-        connected sources (GitHub, chats, calendar, notes) for evidence.
+        connected sources (Git, GitHub, chats, calendar, notes) for evidence. Write summary, lists and section \
+        text in light Markdown. This is a scheduled run: don't set up another schedule.
 
         1. Call get_diary_work({}). If data.work is null, stop: nothing is due. Read data.project, data.brief and \
         data.work.draft. Use the returned project, folders and repository to scope the search. Follow the brief using \
