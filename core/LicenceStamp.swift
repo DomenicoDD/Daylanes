@@ -45,8 +45,17 @@ enum LicenceStamp {
         return Stamp(licensed: licensed, trialEndsAt: Date(timeIntervalSince1970: TimeInterval(ends)))
     }
 
+    /// Whether this build sells licences. A source build without payments (`TRACKER_ENABLE_PAYMENTS=0`,
+    /// the default in bin/build-desktop) has no trial and never writes a stamp, so nothing is locked.
+    #if TRACKER_PAYMENTS
+    static let enforced = true
+    #else
+    static let enforced = false
+    #endif
+
     /// Why the agent tools are locked, or nil when they may run. No stamp means the app was never opened.
-    static func lockReason(path: String = defaultPath, now: Date = .now) -> String? {
+    static func lockReason(path: String = defaultPath, now: Date = .now, enforced: Bool = LicenceStamp.enforced) -> String? {
+        guard enforced else { return nil }
         guard let stamp = read(from: path) else {
             return "Open the Daylanes app once to start your free trial. The agent tools work during the trial and with a licence."
         }

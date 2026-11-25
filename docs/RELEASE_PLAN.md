@@ -429,7 +429,8 @@ Domenico creates the Polar organization himself (identity and bank details).
    because a Keychain prompt would block an agent-started process. After the trial without a key,
    only `get_status` answers (with `locked` and the reason); other tools return `trial_ended`. No
    stamp (the app was never opened) also locks. The stamp is not signed: Daylanes is open source,
-   so a key in the code would be public, and anyone can build without the lock anyway.
+   so a key in the code would be public, and anyone can build without the lock anyway. A build
+   without payments (`TRACKER_ENABLE_PAYMENTS=0`, the source default) never locks the agent tools.
 
 Someone can wipe the Keychain to get a new install ID and a new trial. That is rare and
 acceptable for a 49 USD app.

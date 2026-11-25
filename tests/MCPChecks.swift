@@ -328,13 +328,15 @@ struct MCPChecks {
 
         // Licence lock (core/LicenceStamp.swift)
         let stampPath = folder.appendingPathComponent("licence-stamp.json").path
-        check(LicenceStamp.lockReason(path: stampPath) != nil, "no stamp yet locks the tools")
+        check(LicenceStamp.lockReason(path: stampPath, enforced: true) != nil, "no stamp yet locks the tools")
         try LicenceStamp.write(.init(licensed: false, trialEndsAt: .now.addingTimeInterval(3600)), to: stampPath)
-        check(LicenceStamp.lockReason(path: stampPath) == nil, "a running trial unlocks the tools")
+        check(LicenceStamp.lockReason(path: stampPath, enforced: true) == nil, "a running trial unlocks the tools")
         try LicenceStamp.write(.init(licensed: false, trialEndsAt: .now.addingTimeInterval(-60)), to: stampPath)
-        check(LicenceStamp.lockReason(path: stampPath) != nil, "an ended trial locks the tools")
+        check(LicenceStamp.lockReason(path: stampPath, enforced: true) != nil, "an ended trial locks the tools")
         try LicenceStamp.write(.init(licensed: true, trialEndsAt: .now.addingTimeInterval(-60)), to: stampPath)
-        check(LicenceStamp.lockReason(path: stampPath) == nil, "a licence unlocks the tools after the trial")
+        check(LicenceStamp.lockReason(path: stampPath, enforced: true) == nil, "a licence unlocks the tools after the trial")
+        try? FileManager.default.removeItem(atPath: stampPath)
+        check(LicenceStamp.lockReason(path: stampPath, enforced: false) == nil, "a build without payments never locks")
 
         var lockedSession = MCP.Session(options: MCP.Options(databasePath: database, access: .write,
                                                              lockReason: { "Your Daylanes trial has ended." }))
