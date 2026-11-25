@@ -421,6 +421,8 @@ struct DiaryPage: View {
         var result = style
         result.timeZone = zone
         result.calendar = TimeZones.calendar(zone)
+        // Month first ("Nov 25"), like the Overview and Projects period subtitles, whatever the Mac's region.
+        result.locale = Locale(identifier: "en_US")
         return result
     }
 
