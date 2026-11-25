@@ -10,8 +10,8 @@ sales.
 | | |
 |---|---|
 | Price | 39 USD once. 29 USD if bought during the 14-day trial. |
-| Licence | Works forever. Includes 12 months of updates. 2 Macs per key. |
-| Key expiry in Polar | **None.** The app checks the 12 months itself (see "How the pieces fit"). |
+| Licence | Perpetual: works forever and includes every future update (changed 2026-11-25, was 12 months of updates). 2 Macs per key. |
+| Key expiry in Polar | **None.** |
 | Trial price | A code-less 10 USD discount that only the checkout server can apply. Nobody can share a code. |
 
 ## How the pieces fit
@@ -28,9 +28,7 @@ App (Settings > Account)
   help. It creates a Polar checkout at 29 or 39 USD and the app opens it in the browser.
 - After paying, the customer finds the key on their Polar **purchases page**. Polar's receipt email
   links to it. They paste it into Settings > Account.
-- The app reads the purchase date from the key and compares it with the build's release date,
-  which `bin/build-desktop` writes into `Info.plist`. A build released more than 12 months after
-  the purchase asks for a renewal; older builds keep working.
+- A valid key unlocks every build, old and new. There is no update window and no renewal.
 
 ### Where Stripe fits
 
@@ -57,7 +55,7 @@ fee. A 39 USD sale nets about 35.90 USD, a 29 USD sale about 26.60 USD.
 |---|---|
 | Description | `Daylanes licence key` |
 | Prefix (custom branding) | `DAYLANES` |
-| Expiration | **Off.** Do not set 1 year: that would expire the key and lock owners out of the version they paid for. |
+| Expiration | **Off.** An expiring key would lock owners out of the app. |
 | Activation limits | **On, 2** |
 | Let customers deactivate instances | **On.** They can free a Mac from their purchases page as well as from the app. |
 | Usage limit | **Off** |
@@ -210,12 +208,11 @@ link reports `download_click`.
 5. Update `Info.plist` (`TrackerPolarAPI = https://api.polar.sh`, live Organization ID), build,
    sign and notarize the DMG.
 
-## Renewals (after 12 months)
+## Updates
 
-For now a renewal is a new purchase of the same product at 39 USD. It gives a new key, which the
-customer pastes in Settings > Account. A cheaper renewal (the plan suggests about 29 USD) needs a
-second product, "Daylanes update renewal", with the same licence benefit. That is only needed
-before the first owners reach month 12, so there is time.
+A licence includes every future update, so there is nothing to renew. The app checks
+`https://daylanes.app/updates/latest.json` and shows "Update available" in the sidebar; see
+[UPDATES.md](UPDATES.md).
 
 ## App identity
 

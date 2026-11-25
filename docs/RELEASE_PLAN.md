@@ -316,7 +316,7 @@ Each release, in `bin/release` (new script, replaces the ad-hoc `codesign --sign
    also stapling `Tracker.app` before packaging helps offline first launch).
 7. Check: `spctl -a -vvv -t open --context context:primary-signature Tracker.dmg` and
    `spctl -a -vvv build/Tracker.app` should say "Notarized Developer ID".
-8. Publish the DMG and the Sparkle appcast entry.
+8. Publish the DMG, then the update feed (docs/UPDATES.md).
 
 Later: move steps 2–7 to a GitHub Actions macOS runner with the certificate and API key as
 secrets.
@@ -387,17 +387,12 @@ Decided with Domenico on 2026-11-20.
 **Price:** one-time purchase, **49 USD**. Buying during the trial costs **29 USD**.
 The official installer includes a **14-day trial**. When it ends, the price goes up and the app locks until licensed. The default open-source build compiles without payments or a trial.
 
-**License terms:** the app keeps working forever; updates are free for 12 months
-after purchase. A later 2.0 is a paid upgrade at about 29 USD for existing owners.
-2 Macs per license (Polar activation limit).
+**License terms** (changed by Domenico on 2026-11-25, was 12 months of updates): the
+licence is perpetual. The app keeps working forever and every future update is included,
+with no renewal. 2 Macs per license (Polar activation limit).
 
-The license key itself **never expires**: Polar's expiry setting expires the key, not
-just update eligibility, so using it would lock owners out of the version they paid for
-at month 13. Instead the app tracks the update window itself: it reads the purchase date
-from the key (`created_at` in Polar's validate/activate response), and each build embeds
-its release date. A build released more than 12 months after the purchase shows "This
-update needs a renewal" and offers the previous version; older builds keep working. The
-same check runs when an existing purchase is activated on a replacement Mac.
+The license key itself **never expires**, and the app no longer compares the purchase date
+with the build's release date. New versions are announced by the update check (docs/UPDATES.md).
 
 **Merchant of Record: Polar** (also supported by TrustMRR). New organizations pay
 5% + 0.50 USD per sale, +1.5% for non-US cards, plus Stripe payout fees; no monthly fee.
@@ -421,7 +416,7 @@ Domenico creates the Polar organization himself (identity and bank details).
    Code-less discounts can only be applied through the API, so there is no code to share.
    The Worker stores the trial end in KV with the original duration in metadata. A record without metadata comes from the seven-day release.
 3. **Activation.** The Polar product grants a License Key benefit (prefix `DAYLANES`,
-   activation limit 2, no expiry; update window checked in the app as above). After paying, the user pastes the key
+   activation limit 2, no expiry). After paying, the user pastes the key
    (or opens a `tracker://activate?key=` link from the success page). The app calls Polar's
    public customer-portal license endpoints (`activate`, then `validate` on launch and
    once a day, with offline grace of 14 days); these need no token.

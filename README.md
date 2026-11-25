@@ -2,7 +2,7 @@
 
 Daylanes is a local Mac app, CLI, and MCP server for consultant time, agent usage, and costs. It reads the history of Codex, Claude Code, OpenCode and 17 other coding agents on the Mac and stores the reporting metadata in SQLite.
 
-The source is available under the [MIT License](LICENSE). The [official Mac installer](https://daylanes.app/download) includes a 14-day free trial. A licence costs **$29 during the trial** or **$39 afterward**, with 12 months of updates and activation on up to two Macs.
+The source is available under the [MIT License](LICENSE). The [official Mac installer](https://daylanes.app/download) includes a 14-day free trial. A licence costs **$29 during the trial** or **$39 afterward**, with every future update included and activation on up to two Macs.
 
 ## Open the Mac app
 

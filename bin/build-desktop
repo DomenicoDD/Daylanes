@@ -31,11 +31,8 @@ cp desktop/Info.plist "$tracker_contents/Info.plist"
 set --
 if [ "$tracker_payments" = 1 ]; then
   set -- "$@" -D TRACKER_PAYMENTS
-  # Builds released more than 12 months after a purchase ask for a renewal.
-  /usr/libexec/PlistBuddy -c "Set :TrackerReleaseDate ${TRACKER_RELEASE_DATE:-$(date -u +%Y-%m-%d)}" \
-    "$tracker_contents/Info.plist"
 else
-  for tracker_key in TrackerPolarAPI TrackerPolarOrganizationID TrackerCheckoutServer TrackerCheckoutLink TrackerReleaseDate; do
+  for tracker_key in TrackerPolarAPI TrackerPolarOrganizationID TrackerCheckoutServer TrackerCheckoutLink; do
     /usr/libexec/PlistBuddy -c "Delete :$tracker_key" "$tracker_contents/Info.plist"
   done
 fi

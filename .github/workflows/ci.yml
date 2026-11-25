@@ -32,6 +32,8 @@ jobs:
           xcrun swiftc -parse-as-library core/HTTP.swift desktop/GoogleCalendarAPI.swift desktop/GoogleCalendarAccountStore.swift \
             desktop/GoogleCalendarCallback.swift tests/GoogleCalendarChecks.swift -o "$out/calendar"
           "$out/calendar"
+          xcrun swiftc -parse-as-library desktop/UpdateFeed.swift tests/UpdateChecks.swift -o "$out/updates"
+          "$out/updates"
 
   reference:
     name: Python reference and checkout Worker tests

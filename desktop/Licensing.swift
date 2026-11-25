@@ -3,12 +3,11 @@ import Foundation
 
 /// Trial, purchase and licence key.
 ///
-/// Terms (docs/RELEASE_PLAN.md section 8): 14-day trial, then locked until licensed. A licensed app works forever, updates are included for 12 months
-/// after purchase, 2 Macs per key. The Polar key never expires; this file checks the update window by
-/// comparing the key's purchase date with this build's release date.
+/// Terms (docs/RELEASE_PLAN.md section 8): 14-day trial, then locked until licensed. A licence is
+/// perpetual: it works forever, includes every future update, and covers 2 Macs. The Polar key never expires.
 ///
 /// Settings come from Info.plist so the sandbox and live builds differ only there:
-/// `TrackerPolarAPI`, `TrackerPolarOrganizationID`, `TrackerCheckoutServer`, `TrackerReleaseDate` (yyyy-MM-dd).
+/// `TrackerPolarAPI`, `TrackerPolarOrganizationID`, `TrackerCheckoutServer`.
 @MainActor
 final class Licensing: ObservableObject {
     static let shared = Licensing()
@@ -16,7 +15,6 @@ final class Licensing: ObservableObject {
     static let trialDays = 14
     private static let legacyTrialDays = 7
     private static let secondsPerDay: TimeInterval = 86_400
-    static let updateMonths = 12
     /// How long a licensed Mac keeps working without reaching Polar.
     static let offlineGraceDays = 14
     static let fullPrice = 39
@@ -44,8 +42,6 @@ final class Licensing: ObservableObject {
         case trial(daysLeft: Int)
         case trialEnded
         case licensed
-        /// Licensed, but this build came out after the 12 months of updates ended.
-        case updatesEnded(since: Date)
         /// Licensed, but Polar couldn't be reached for `offlineGraceDays`. The key and activation are
         /// kept, so the next successful check restores the licence without using another Mac slot.
         case checkOverdue
@@ -64,11 +60,6 @@ final class Licensing: ObservableObject {
             > Double(Self.offlineGraceDays) * 86_400 {
             return .checkOverdue
         }
-        if state.key != nil, let purchased = state.purchasedAt {
-            let end = Self.updatesEnd(purchasedAt: purchased)
-            if let release = config.releaseDate, release > end { return .updatesEnded(since: end) }
-            return .licensed
-        }
         if state.key != nil { return .licensed }
         let remaining = Self.trialEnd(state).timeIntervalSinceNow
         return remaining > 0 ? .trial(daysLeft: Int(ceil(remaining / Self.secondsPerDay))) : .trialEnded
@@ -86,12 +77,6 @@ final class Licensing: ObservableObject {
     var price: Int {
         if case .trial = status { return Self.trialPrice }
         return Self.fullPrice
-    }
-
-    var updatesUntil: Date? { state?.purchasedAt.map(Self.updatesEnd) }
-
-    static func updatesEnd(purchasedAt: Date) -> Date {
-        Calendar(identifier: .gregorian).date(byAdding: .month, value: updateMonths, to: purchasedAt) ?? purchasedAt
     }
 
     /// Loads or creates the Keychain record, asks the server for the trial end, then checks the key
@@ -202,7 +187,7 @@ final class Licensing: ObservableObject {
                   let license = reply["license_key"] as? [String: Any] else {
                 throw LicenseError("Polar's reply had no activation.")
             }
-            // A renewal key replaces the old one: free the old key's slot for this Mac first.
+            // A different key replaces the old one: free the old key's slot for this Mac first.
             if let old = state?.key, old != key { await releaseActivation() }
             state?.key = key
             state?.activationID = activation
@@ -360,7 +345,6 @@ final class Licensing: ObservableObject {
         let organizationID: String?
         let checkoutServer: URL?
         let checkoutLink: URL?
-        let releaseDate: Date?
 
         init(bundle: Bundle = .main) {
             func value(_ key: String) -> String? {
@@ -372,13 +356,6 @@ final class Licensing: ObservableObject {
             organizationID = value("TrackerPolarOrganizationID")
             checkoutServer = value("TrackerCheckoutServer").flatMap(URL.init(string:))
             checkoutLink = value("TrackerCheckoutLink").flatMap(URL.init(string:))
-            releaseDate = value("TrackerReleaseDate").flatMap { day in
-                let format = DateFormatter()
-                format.locale = Locale(identifier: "en_US_POSIX")
-                format.timeZone = TimeZone(identifier: "UTC")
-                format.dateFormat = "yyyy-MM-dd"
-                return format.date(from: day)
-            }
         }
     }
 }
