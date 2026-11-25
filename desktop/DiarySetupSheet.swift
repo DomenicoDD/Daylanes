@@ -26,6 +26,7 @@ struct DiarySetupSheet: View {
     @State private var busy = false
     @State private var error: String?
     @State private var copied = false
+    @State private var mode: Mode = .prompt
 
     init(database: String, projects: [Project], project: String?, didChange: @escaping (String) -> Void) {
         self.database = database
@@ -45,15 +46,17 @@ struct DiarySetupSheet: View {
         SheetFrame(title: project.isEmpty ? "Diary" : "\(project) diary",
                    chips: isOn ? ["On", routine.agent.title] : [],
                    subtitle: "An agent writes a daily entry and standup from your project's activity.",
-                   primary: isOn ? "Save" : "Turn on", canSubmit: canSubmit, busy: busy, width: 580,
-                   submit: { save() }) {
+                   primary: mode != .daylanes ? "Done" : (isOn ? "Save" : "Turn on"),
+                   canSubmit: mode != .daylanes ? !project.isEmpty && !routine.brief.pythonStripped.isEmpty : canSubmit,
+                   busy: busy, width: 580,
+                   submit: { finish() }) {
             if projects.isEmpty {
                 Text("Create a project first, then give it a diary.").foregroundStyle(SheetTheme.muted)
             } else {
                 form
             }
         } leading: {
-            if isOn {
+            if isOn && mode == .daylanes {
                 Button("Turn off") { turnOff() }
                     .buttonStyle(SheetButtonStyle(kind: .destructive))
                     .disabled(busy)
@@ -69,8 +72,38 @@ struct DiarySetupSheet: View {
         .onReceive(DistributedNotificationCenter.default().publisher(for: DiaryStore.changed)) { _ in refreshStatus() }
     }
 
+    /// How the diary gets written. The sheet shows the steps for one way at a time, like a connect screen.
+    enum Mode: CaseIterable {
+        case prompt, daylanes, mcp
+
+        var title: String {
+            switch self {
+            case .prompt: "Copy prompt"
+            case .daylanes: "Daylanes runs it"
+            case .mcp: "MCP"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .prompt: "Paste into any agent"
+            case .daylanes: "Every day, on its own"
+            case .mcp: "Connect your agent"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .prompt: "doc.on.clipboard"
+            case .daylanes: "calendar.badge.clock"
+            case .mcp: "point.3.connected.trianglepath.dotted"
+            }
+        }
+    }
+
     @ViewBuilder
     private var form: some View {
+        modePicker
         if projects.count > 1 {
             SheetField(label: "Project") {
                 SheetMenu(selection: $project, groups: [projects.map { ($0.name, $0.name) }])
@@ -90,30 +123,112 @@ struct DiarySetupSheet: View {
                     .buttonStyle(SheetButtonStyle(kind: .link))
             }
         }
-        SheetGroup {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Write it from any agent").font(.system(size: 13, weight: .semibold))
-                    Text("Paste one prompt into Codex, Claude Code or another agent. It gets the steps and this brief from Daylanes and saves the entry here.")
-                        .font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                Button(copied ? "Copied" : "Copy prompt", systemImage: copied ? "checkmark" : "doc.on.doc") { copyPrompt() }
-                    .buttonStyle(SheetButtonStyle(kind: .primary))
-                    .disabled(busy || project.isEmpty || routine.brief.pythonStripped.isEmpty)
-                    .accessibilityIdentifier("diary-copy-prompt")
+        Divider().overlay(SheetTheme.footerLine).padding(.vertical, 2)
+        Text("Follow these steps").font(.system(size: 13, weight: .semibold))
+        VStack(alignment: .leading, spacing: 0) {
+            switch mode {
+            case .prompt: promptSteps
+            case .daylanes: daylanesSteps
+            case .mcp: mcpSteps
             }
         }
-        Text("Or let Daylanes write it every day").font(.system(size: 13, weight: .semibold))
-            .padding(.top, 4)
-        SheetField(label: "Written by") {
-            SheetSegments(selection: $routine.agent, options: DiaryAgent.allCases.map { ($0, $0.title) })
-            agentLine
-            Text(accessNote).font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+        if let error {
+            Label(error, systemImage: "exclamationmark.circle")
+                .font(.system(size: 12)).foregroundStyle(Theme.recording)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        SheetField(label: "When") {
+    }
+
+    private var modePicker: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(Mode.allCases.enumerated()), id: \.offset) { index, option in
+                let selected = option == mode
+                if index > 0 { Rectangle().fill(SheetTheme.border).frame(width: 1) }
+                Button { mode = option } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: option.icon).font(.system(size: 14))
+                            .foregroundStyle(selected ? Theme.text : SheetTheme.muted)
+                            .frame(height: 18)
+                        Text(option.title).font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(selected ? Theme.text : SheetTheme.label)
+                        Text(option.detail).font(.system(size: 11))
+                            .foregroundStyle(SheetTheme.muted)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(selected ? SheetTheme.fieldFocused : .clear,
+                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(selected ? Theme.text.opacity(0.55) : .clear, lineWidth: 1))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SheetTheme.border))
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// One numbered step, with a line down to the next one like a checklist.
+    private func step<Content: View>(_ number: Int, _ title: String, _ detail: String? = nil, last: Bool = false,
+                                     @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 0) {
+                Text("\(number)")
+                    .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                    .foregroundStyle(SheetTheme.label)
+                    .frame(width: 22, height: 22)
+                    .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(SheetTheme.border))
+                Rectangle().fill(last ? .clear : SheetTheme.border).frame(width: 1).frame(maxHeight: .infinity)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    if let detail {
+                        Text(detail).font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                content()
+            }
+            .padding(.top, 2)
+            .padding(.bottom, last ? 0 : 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // Lets the connecting line fill the step's height.
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var promptSteps: some View {
+        step(1, "Copy the prompt", "It saves this brief. The agent gets the steps from Daylanes and saves the entry here.") {
+            Button(copied ? "Copied" : "Copy prompt", systemImage: copied ? "checkmark" : "doc.on.doc") { copyPrompt() }
+                .buttonStyle(SheetButtonStyle(kind: .primary))
+                .disabled(busy || project.isEmpty || routine.brief.pythonStripped.isEmpty)
+                .accessibilityIdentifier("diary-copy-prompt")
+        }
+        step(2, "Paste it into your agent",
+             "Codex, Claude Code or any agent that can run commands. Start it in the project’s folder so it can read the Git history. If no workday is due, it writes the latest one.") {
+            EmptyView()
+        }
+        step(3, "Make it daily (optional)",
+             "Ask the agent to run it every day. It schedules itself for \(dailyRunLabel), just after your workday ends, and checks that the run can reach GitHub, Linear and your calendar.",
+             last: true) {
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var daylanesSteps: some View {
+        step(1, "Choose the agent", accessNote) {
+            SheetSegments(selection: $routine.agent, options: DiaryAgent.allCases.map { ($0, $0.title) })
+            agentLine
+        }
+        step(2, "Choose when") {
             SheetSegments(selection: $setTime, options: [(false, "When the workday ends"), (true, "At a set time")])
             HStack(spacing: 8) {
                 if setTime {
@@ -140,7 +255,7 @@ struct DiarySetupSheet: View {
                 }
             }
         }
-        SheetField(label: "Works in", note: "the agent starts here") {
+        step(3, "Choose where it starts", "The agent starts in this folder.", last: true) {
             HStack(spacing: 8) {
                 Text(folder.isEmpty ? "Choose a folder" : (folder as NSString).abbreviatingWithTildeInPath)
                     .font(.system(size: 13, design: .monospaced))
@@ -151,20 +266,30 @@ struct DiarySetupSheet: View {
                 Button("Choose…") { chooseFolder() }
                     .buttonStyle(SheetButtonStyle(kind: .secondary))
             }
+            if let attempt { statusLine(attempt) }
         }
-        if let attempt { statusLine(attempt) }
-        if let error {
-            Label(error, systemImage: "exclamationmark.circle")
-                .font(.system(size: 12)).foregroundStyle(Theme.recording)
-                .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var mcpSteps: some View {
+        step(1, "Choose the agent") {
+            SheetSegments(selection: $routine.agent, options: DiaryAgent.allCases.map { ($0, $0.title) })
         }
         if let saved, let cli {
-            DisclosureGroup("Connect over MCP instead") {
-                manualSetup(saved, cli: cli).padding(.top, 8)
+            manualSetup(saved, cli: cli)
+        } else {
+            step(2, "Create the connection", "Saves this brief and gives the project its own Diary connection.",
+                 last: true) {
+                Button("Create connection") { save(schedule: false) }
+                    .buttonStyle(SheetButtonStyle(kind: .primary))
+                    .disabled(busy || project.isEmpty || routine.brief.pythonStripped.isEmpty)
             }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(SheetTheme.label)
         }
+    }
+
+    private var dailyRunLabel: String {
+        let minutes = (try? DiaryClock.minutes(cutoff)) ?? 300
+        return DiaryClock.label((minutes + 5) % (24 * 60))
     }
 
     @ViewBuilder
@@ -213,15 +338,18 @@ struct DiarySetupSheet: View {
         .foregroundStyle(SheetTheme.muted)
     }
 
+    @ViewBuilder
     private func manualSetup(_ saved: DiaryRoutine, cli: String) -> some View {
         let name = DiarySchedule.manualServer(saved.id)
         let command = AgentMCPCommand(executable: cli, database: database, diaryRoutine: saved.id)
-        let prefix = saved.agent == .codex ? "codex mcp add \(name)" : "claude mcp add --scope user --transport stdio \(name)"
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("Register this project's Diary connection, then send the instruction from any \(saved.agent.title) conversation that should write it.")
-                .font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+        let prefix = routine.agent == .codex ? "codex mcp add \(name)" : "claude mcp add --scope user --transport stdio \(name)"
+        step(2, "Register the connection", "Run this once in Terminal. It connects \(routine.agent.title) to this project’s diary.") {
             SetupCodeBlock(title: "Registration command", values: [command.registration(using: prefix)])
-            SetupCodeBlock(title: "Instruction", values: [DiarySchedule.instruction(server: name)])
+        }
+        step(3, "Ask for an entry",
+             "Send this from any \(routine.agent.title) conversation that should write the diary. If no workday is due, it writes the latest one.",
+             last: true) {
+            SetupCodeBlock(title: "Instruction", values: [DiarySchedule.instruction(server: name, manual: true)])
         }
     }
 
@@ -265,6 +393,7 @@ struct DiarySetupSheet: View {
             setTime = routine.runMinute != nil
             runAt = DiaryClock.label(routine.runMinute ?? 480)
             installed = saved.flatMap { DiarySchedule.installed($0.id, database: database) }
+            if installed != nil { mode = .daylanes }
             folder = installed?.directory ?? projects.first { $0.name == project }?.folders.first
                 ?? FileManager.default.homeDirectoryForCurrentUser.path
             if let installed, installed.agent == routine.agent {
@@ -298,6 +427,13 @@ struct DiarySetupSheet: View {
                 locating = false
             }
         }
+    }
+
+    /// The footer button: turns on the schedule, or saves the brief and closes for the other ways.
+    private func finish() {
+        guard mode != .daylanes else { return save() }
+        save(schedule: false)
+        if error == nil { dismiss() }
     }
 
     /// Saves the routine. With `schedule`, also installs or updates the local schedule.

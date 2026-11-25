@@ -373,6 +373,15 @@ enum DiaryStore {
         return nil
     }
 
+    /// The workday to write when a person asks for an entry now and nothing is due: the one in progress, or the
+    /// one that just ended while the current one is under four hours old.
+    static func latestDay(_ db: Database, now: Date = .now) throws -> Day {
+        let clock = try clock(db)
+        let current = clock.workday(now)
+        let started = DiaryClock.date(clock.window(current).start)
+        return now.timeIntervalSince(started) < 4 * 3600 ? current.adding(days: -1) : current
+    }
+
     /// Called under the engine's immediate transaction. The writer never touches the user's edits.
     static func submit(_ db: Database, project: String, work: Work, through: Int, revision: Int,
                        content: DiaryContent) throws -> Bool {

@@ -243,6 +243,13 @@ struct DiaryChecks {
         try check(guide.contains("## Running it every day") && guide.contains("`gh`") && guide.contains("05:05"),
                   "the guide explains scheduling and the access an unattended run needs")
 
+        try check(try DiaryStore.latestDay(db, now: clock.instant(wednesday, at: 360)) == tuesday
+                  && DiaryStore.latestDay(db, now: clock.instant(wednesday, at: 900)) == wednesday,
+                  "an entry asked for now covers the workday in progress, or the one that just ended")
+        try check(DiarySchedule.instruction(server: "x", manual: true).contains("latest_work_date")
+                  && !DiarySchedule.instruction().contains("latest_work_date"),
+                  "only a manual connection writes the latest workday when nothing is due")
+
         // Entries saved under a late cutoff before workdays were named by their end move to that day.
         let lateProject = "Lanterns"
         try Store.createProject(db, name: lateProject, client: "Example Studio", kind: "billable", folder: nil)

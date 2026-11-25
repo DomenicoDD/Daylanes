@@ -48,6 +48,7 @@ enum DiaryGuide {
     static func text(project: String, client: String?, brief: String, channel: Channel,
                      clock: DiaryClock = DiaryClock(zone: .current, cutoff: 300)) -> String {
         let read: String
+        let latestRead: String
         let save: String
         // MCP tools wrap results in `data`; the CLI prints the operation's result as is.
         var root = "data."
@@ -56,6 +57,7 @@ enum DiaryGuide {
             let id = routine.uuidString.lowercased()
             root = ""
             read = "`\(prefix) diary work \(id)` (add `--date YYYY-MM-DD` only to redo a specific day)"
+            latestRead = "(add `--date` with that date)"
             save = """
                 pipe the JSON to `\(prefix) diary submit \(id)`, for example:
 
@@ -68,6 +70,7 @@ enum DiaryGuide {
                 """
         case .mcp:
             read = "the `get_diary_work` tool with `{}` (pass `work_date` only to redo a specific day)"
+            latestRead = "(pass it as `work_date`)"
             save = "call the `submit_diary_entry` tool with those fields."
         }
         return """
@@ -79,7 +82,9 @@ enum DiaryGuide {
             ## Steps
 
             1. Read the due workday with \(read). The result's `\(root)work` is the oldest workday that still needs \
-            an entry. If it is null, nothing is due: say so and stop.
+            an entry. If it is null, nothing is due on the schedule. On a scheduled run, say so and stop. If the \
+            person asked you for an entry now, read it again for `\(root)latest_work_date` \(latestRead) and write \
+            that: it is the workday in progress, or the one that just ended if the current one has barely started.
             2. Gather evidence for that workday from the sources you can reach: the project's folders and Git \
             history, GitHub pull requests and reviews, chats, the calendar and meeting notes. Scope the search with \
             `\(root)project` (folders and repository) and keep to the window: from `start_inclusive` up to, not \
@@ -89,7 +94,8 @@ enum DiaryGuide {
             starting over.
             4. Save it: copy `work_date`, `window`, `through` and `revision` exactly from `\(root)work`, put your \
             writing in `entry`, and \(save)
-            5. Read the due workday again. Repeat for up to seven missed workdays, then report what you wrote and \
+            5. Read the due workday again as in step 1, without a date, and repeat for up to seven missed workdays. Stop when it is null, \
+            then report what you wrote and \
             name any source you couldn't reach, so the person knows the entry is missing it.
 
             ## The workday
@@ -121,8 +127,7 @@ enum DiaryGuide {
             Skip this when you are already running on a schedule. If the person wants the diary written every \
             day, offer two ways and set up the one they choose:
 
-            - **Daylanes runs it.** In Daylanes, open the Diary, choose “Set up diary…”, and pick Codex or Claude Code under \
-            “Or let Daylanes write it every day”.
+            - **Daylanes runs it.** In Daylanes, open the Diary, choose “Set up diary…”, then “Daylanes runs it”.
             - **You run it.** Create a recurring task in your own tool that starts every day at \
             \(dailyRun(clock)) (\(clock.zone.identifier)), just after the workday ends, and sends the same prompt \
             the person gave you.

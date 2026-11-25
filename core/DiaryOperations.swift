@@ -39,7 +39,10 @@ enum DiaryOperations {
             } else {
                 details = .null
             }
-            return .object([("project", projectInfo), ("brief", .string(routine.brief)), ("work", details)])
+            // Nothing due on the schedule: name the workday to write if the person asked for an entry now.
+            let latest: JSON = work == nil && day == nil ? .string(try DiaryStore.latestDay(db).iso) : .null
+            return .object([("project", projectInfo), ("brief", .string(routine.brief)), ("work", details),
+                            ("latest_work_date", latest)])
         },
         EngineOperation(name: "submit_diary_entry", summary: "Save a draft for this diary project and date.", effect: .reversible) { json, db, _ in
             let params = Params(json)
@@ -102,7 +105,7 @@ enum DiaryOperations {
 
     static let tools = [
         MCPTool(name: "get_diary_work", title: "Get the current Diary brief",
-                description: "Read this connection’s project, current brief and oldest due workday, including any saved draft. Omit work_date for scheduled runs. If work is null, there is nothing due.",
+                description: "Read this connection’s project, current brief and oldest due workday, including any saved draft. Omit work_date for scheduled runs. If work is null, nothing is due on the schedule; when the person asked for an entry now, call again with work_date set to the returned latest_work_date.",
                 properties: [("work_date", MCPTools.string("Supply a specific date only for a requested backfill or refresh.", format: "date"))],
                 operation: "get_diary_work", toolset: "diary"),
         MCPTool(name: "submit_diary_entry", title: "Save a Diary draft",
