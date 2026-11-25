@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The project diary: the usual page header, then the recent workdays newest first on a timeline with the date on
-/// the left. Each entry is a soft grey block like the other pages' panels. Days without an entry fold into a quiet row.
+/// the left. Each entry sits in a faint outline. Days without an entry fold into a quiet row.
 struct DiaryPage: View {
     let snapshot: Snapshot
     @State private var span = DiaryPage.step
@@ -300,7 +300,8 @@ struct DiaryPage: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .blockSurface()
+        // No grey fill: the entry is outlined with the faint hairline so long diaries stay light.
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline))
     }
 
     private func standup(_ entry: DiaryEntry) -> some View {
@@ -333,8 +334,7 @@ struct DiaryPage: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // A card-coloured panel inside the grey entry block, like the chips in the Overview summary sentence.
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Theme.block.opacity(0.55), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder
@@ -406,7 +406,7 @@ struct DiaryPage: View {
             .foregroundStyle(Theme.Tint.neutral.ink)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .background(Theme.block, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(source.title + "\n" + source.url.absoluteString)
