@@ -56,14 +56,15 @@ test("checkout applies the trial discount only inside the trial", async (t) => {
   assert.equal(sent[0].url, "https://sandbox-api.polar.sh/v1/checkouts/");
   assert.equal(sent[0].init.headers.Authorization, "Bearer polar_oat_test");
   assert.deepEqual(sent[0].body, {
-    products: ["product-1"], allow_discount_codes: false,
+    products: ["product-1"], allow_discount_codes: true,
     success_url: "https://daylanes.app/thanks?checkout_id={CHECKOUT_ID}",
     discount_id: "discount-1", metadata: { install_id: ID },
   });
 
   env.store.set(`trial:${ID}`, { value: "2020-01-01T00:00:00.000Z", metadata: null });
   const after = await (await worker.fetch(post("/checkout", { install_id: ID }), env)).json();
-  assert.equal(after.price, 49);
+  assert.equal(after.price, 39);
+  assert.equal(sent[1].body.allow_discount_codes, true);
   assert.equal(sent[1].body.discount_id, undefined);
 });
 

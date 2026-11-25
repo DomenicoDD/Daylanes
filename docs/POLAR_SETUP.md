@@ -9,10 +9,10 @@ sales.
 
 | | |
 |---|---|
-| Price | 49 USD once. 29 USD if bought during the 14-day trial. |
+| Price | 39 USD once. 29 USD if bought during the 14-day trial. |
 | Licence | Works forever. Includes 12 months of updates. 2 Macs per key. |
 | Key expiry in Polar | **None.** The app checks the 12 months itself (see "How the pieces fit"). |
-| Trial price | A code-less 20 USD discount that only the checkout server can apply. Nobody can share a code. |
+| Trial price | A code-less 10 USD discount that only the checkout server can apply. Nobody can share a code. |
 
 ## How the pieces fit
 
@@ -20,12 +20,12 @@ sales.
 App (Settings > Account)
   ├─ POST /trial, /checkout ──▶ Cloudflare Worker (server/checkout) ──▶ Polar Checkout API
   │                              holds the Polar token, owns the trial clock,
-  │                              adds the 20 USD discount during the trial
+  │                              adds the 10 USD discount during the trial
   └─ activate / validate / deactivate ──▶ Polar customer-portal licence API (no token needed)
 ```
 
 - The **Worker** decides whether you are still in the trial, so changing the Mac's clock doesn't
-  help. It creates a Polar checkout at 29 or 49 USD and the app opens it in the browser.
+  help. It creates a Polar checkout at 29 or 39 USD and the app opens it in the browser.
 - After paying, the customer finds the key on their Polar **purchases page**. Polar's receipt email
   links to it. They paste it into Settings > Account.
 - The app reads the purchase date from the key and compares it with the build's release date,
@@ -41,7 +41,7 @@ from inside Polar. Your bank account must be in the same country as you (Italy i
 its local currency. Wise, Payoneer and Revolut virtual accounts usually fail Stripe's checks.
 
 Fees on Polar's Starter plan: 5% + 0.50 USD per sale, +1.5% for non-US cards, plus Stripe's payout
-fee. A 49 USD sale nets about 45.30 USD, a 29 USD sale about 26.60 USD.
+fee. A 39 USD sale nets about 35.90 USD, a 29 USD sale about 26.60 USD.
 
 ## Step 1. Create the sandbox organization
 
@@ -70,7 +70,7 @@ fee. A 49 USD sale nets about 45.30 USD, a 29 USD sale about 26.60 USD.
 |---|---|
 | Name | `Daylanes` |
 | Description | One or two sentences. Polar's review wants a real description. |
-| Pricing | **One-time purchase**, **Fixed price**, **49 USD** |
+| Pricing | **One-time purchase**, **Fixed price**, **39 USD** |
 | Benefits | Attach the licence key benefit from step 2 |
 
 Save, then copy the **Product ID** from the product page (or its URL).
@@ -83,7 +83,7 @@ Save, then copy the **Product ID** from the product page (or its URL).
 |---|---|
 | Name | `Trial price` (customers see this name at checkout) |
 | Code | **Leave empty.** Without a code it can only be applied through the API, by the Worker. |
-| Type | **Fixed Amount Discount**, **20 USD** |
+| Type | **Fixed Amount Discount**, **10 USD** |
 | Recurring | **Once** |
 | Products | Only **Daylanes** |
 | Starts/ends at, max redemptions | Leave empty |
@@ -141,7 +141,7 @@ curl -s -X POST https://daylanes-checkout.<you>.workers.dev/checkout \
 # {"url":"https://sandbox.polar.sh/checkout/…","price":29}
 ```
 
-Open that URL: the checkout should show 49 USD minus "Trial price" 20 USD = 29 USD.
+Open that URL: the checkout should show 39 USD minus "Trial price" 10 USD = 29 USD, and an "Add discount code" field.
 
 ## Step 7. Point the app at Polar and the Worker
 
@@ -167,7 +167,7 @@ of the organization, so buy with your own email.
    "Licensed to …" and "Updates included until <a year from today>".
 2. **Buy after the trial.** In Cloudflare > Workers KV > TRIALS, edit this Mac's `trial:<id>` value
    to a past date (for example `2020-01-01T00:00:00.000Z`). The Buy button on a second test
-   install (or the curl above with a new UUID and an edited KV entry) should show 49 USD.
+   install (or the curl above with a new UUID and an edited KV entry) should show 39 USD.
 3. **Third Mac is refused.** Activate the same key twice more (the app on a second Mac, or a curl
    to `https://sandbox-api.polar.sh/v1/customer-portal/license-keys/activate` with
    `{"key":"…","organization_id":"…","label":"test"}`). The third activation must fail with 403.
@@ -177,11 +177,11 @@ of the organization, so buy with your own email.
 
 ## Step 9. Website checkout link (for the Cloudflare site, PR 19)
 
-The site's Buy button doesn't know about a trial, so it sells at 49 USD. Two options:
+The site's Buy button doesn't know about a trial, so it sells at 39 USD. Two options:
 
 - **Polar Checkout Link (simplest):** Products > Checkout Links > New, product Daylanes, discount
   codes off. Use the link on the site's Buy button.
-- **Worker:** link to `https://<worker>/buy`, which creates a fresh 49 USD checkout and redirects.
+- **Worker:** link to `https://<worker>/buy`, which creates a fresh 39 USD checkout and redirects.
 
 The production checkout Worker sets `SUCCESS_URL` to the Daylanes licence page, which verifies
 the checkout with Polar before reporting a GA4 `purchase`. A browser sends it only after opt-in
@@ -212,7 +212,7 @@ link reports `download_click`.
 
 ## Renewals (after 12 months)
 
-For now a renewal is a new purchase of the same product at 49 USD. It gives a new key, which the
+For now a renewal is a new purchase of the same product at 39 USD. It gives a new key, which the
 customer pastes in Settings > Account. A cheaper renewal (the plan suggests about 29 USD) needs a
 second product, "Daylanes update renewal", with the same licence benefit. That is only needed
 before the first owners reach month 12, so there is time.
@@ -226,3 +226,17 @@ stable so installed copies can keep their stored trial and licence dates across 
 
 An unlicensed copy locks: the main window, Settings and menu bar show only Buy and the licence key
 field. Tracking keeps running and nothing is deleted. The bundled CLI and MCP server don't check the licence.
+
+## Promotions with discount codes
+
+The Worker creates every checkout with `allow_discount_codes: true`, so the checkout shows an
+"Add discount code" field. To run a promotion, such as Black Friday:
+
+1. **Products > Discounts > New Discount**. Name it (customers see the name), set a **Code** such
+   as `BLACKFRIDAY`, a percentage or fixed amount, **Once**, only the **Daylanes** product.
+2. Set **Starts at** and **Ends at** so it switches itself on and off. Add **Max redemptions** if
+   you want a limit.
+
+Polar applies one discount per checkout. A buyer in the trial already gets the code-less
+"Trial price" discount; typing a code replaces it. Make a promotion bigger than 10 USD off if it
+should also help trial buyers.

@@ -19,7 +19,7 @@ final class Licensing: ObservableObject {
     static let updateMonths = 12
     /// How long a licensed Mac keeps working without reaching Polar.
     static let offlineGraceDays = 14
-    static let fullPrice = 49
+    static let fullPrice = 39
     static let trialPrice = 29
     private static let inactiveKeyMessage = "Your licence key is no longer valid. If you think this is a mistake, contact support."
 

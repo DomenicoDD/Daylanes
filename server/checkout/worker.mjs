@@ -2,21 +2,24 @@
 // Polar checkouts. The Polar access token lives here as a secret; the app never sees it.
 //
 // POST /trial     {"install_id": "<uuid>"}  -> {"trial_ends_at": ISO date, "trial_days": 14, "in_trial": bool}
-// POST /checkout  {"install_id": "<uuid>"}  -> {"url": Polar checkout URL, "price": 29 | 49}
+// POST /checkout  {"install_id": "<uuid>"}  -> {"url": Polar checkout URL, "price": 29 | 39}
 // GET  /buy                                 -> 302 to a Polar checkout at the full price (for the website)
+//
+// Every checkout accepts discount codes, so promotions (a Black Friday code, say) need only a
+// new code in Polar. Polar applies one discount per checkout: a code replaces the trial price.
 //
 // Bindings (wrangler.toml and `wrangler secret put`):
 //   TRIALS             KV namespace, key "trial:<install id>" -> trial end (ISO date) and duration metadata
 //   POLAR_TOKEN        secret, Organization Access Token with the checkouts:write scope
 //   POLAR_API          https://sandbox-api.polar.sh while testing, https://api.polar.sh live
 //   PRODUCT_ID         the Daylanes product's ID
-//   TRIAL_DISCOUNT_ID  the code-less 20 USD discount's ID
+//   TRIAL_DISCOUNT_ID  the code-less 10 USD discount's ID (39 USD list price -> 29 USD)
 //   SUCCESS_URL        optional page shown after paying, may contain checkout_id={CHECKOUT_ID}
 
 export const TRIAL_DAYS = 14;
 const LEGACY_TRIAL_DAYS = 7;
 const DAY_MS = 86_400_000;
-const FULL_PRICE = 49;
+const FULL_PRICE = 39;
 const TRIAL_PRICE = 29;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -82,7 +85,7 @@ export async function trial(env, id, now) {
 }
 
 export async function createCheckout(env, { installID, discounted }) {
-  const body = { products: [env.PRODUCT_ID], allow_discount_codes: false };
+  const body = { products: [env.PRODUCT_ID], allow_discount_codes: true };
   // Without a success URL Polar shows its own confirmation page.
   if (env.SUCCESS_URL) body.success_url = env.SUCCESS_URL;
   if (discounted) body.discount_id = env.TRIAL_DISCOUNT_ID;
