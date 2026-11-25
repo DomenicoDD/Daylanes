@@ -294,6 +294,8 @@ struct DiarySetupSheet: View {
             var value = routine
             value.runMinute = setTime ? try DiaryClock.minutes(runAt) : nil
             if saved == nil { value.firstDay = clock.calendarDay(.now).adding(days: -1).iso }
+            // Saving without the schedule keeps the scheduled agent, so a running schedule doesn't stop matching.
+            if !schedule, let installed { value.agent = installed.agent }
             let runner = DiarySchedule.Runner(agent: value.agent, executable: executable, directory: folder)
             if schedule { try DiarySchedule.validate(runner) }
             let db = try Schema.open(database)
