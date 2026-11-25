@@ -45,13 +45,19 @@ struct DiarySetupSheet: View {
                    chips: isOn ? ["On", routine.agent.title] : [],
                    subtitle: "An agent writes a daily entry and standup from your project's activity.",
                    primary: isOn ? "Save" : "Turn on", canSubmit: canSubmit, busy: busy, width: 580,
-                   submit: save) {
+                   submit: { save() }) {
             if projects.isEmpty {
                 Text("Create a project first, then give it a diary.").foregroundStyle(SheetTheme.muted)
             } else {
                 form
             }
         } leading: {
+            if !isOn {
+                Button("Save without schedule") { save(schedule: false) }
+                    .buttonStyle(SheetButtonStyle(kind: .link))
+                    .disabled(busy || project.isEmpty || routine.brief.pythonStripped.isEmpty)
+                    .help("Save the brief and use your own agent session to write the diary")
+            }
             if isOn {
                 Button("Turn off") { turnOff() }
                     .buttonStyle(SheetButtonStyle(kind: .destructive))
@@ -232,6 +238,7 @@ struct DiarySetupSheet: View {
                 ?? FileManager.default.homeDirectoryForCurrentUser.path
             if let installed, installed.agent == routine.agent {
                 executable = installed.executable
+                locating = false
             } else {
                 locate()
             }
@@ -243,8 +250,10 @@ struct DiarySetupSheet: View {
 
     private func locate() {
         let agent = routine.agent
+        let target = project
         if let installed, installed.agent == agent {
             executable = installed.executable
+            locating = false
             return
         }
         locating = true
@@ -252,14 +261,16 @@ struct DiarySetupSheet: View {
         Task.detached {
             let found = DiarySchedule.locate(agent)
             await MainActor.run {
-                guard routine.agent == agent else { return }
+                // A lookup started for another project or agent no longer applies.
+                guard routine.agent == agent, project == target else { return }
                 executable = found ?? ""
                 locating = false
             }
         }
     }
 
-    private func save() {
+    /// Saves the routine. With `schedule`, also installs or updates the local schedule.
+    private func save(schedule: Bool = true) {
         guard let cli else {
             error = "This Daylanes build is missing its command-line tool."
             return
@@ -272,17 +283,17 @@ struct DiarySetupSheet: View {
             value.runMinute = setTime ? try DiaryClock.minutes(runAt) : nil
             if saved == nil { value.firstDay = clock.calendarDay(.now).adding(days: -1).iso }
             let runner = DiarySchedule.Runner(agent: value.agent, executable: executable, directory: folder)
-            try DiarySchedule.validate(runner)
+            if schedule { try DiarySchedule.validate(runner) }
             let db = try Schema.open(database)
             try db.transaction {
                 try DiaryStore.saveClock(db, clock)
                 try DiaryStore.saveRoutine(db, project: project, value)
             }
-            if installed != runner {
+            if schedule, installed != runner {
                 try DiarySchedule.install(value.id, database: database, cli: cli, runner: runner)
             }
             didChange(project)
-            dismiss()
+            if schedule { dismiss() } else { load() }
         } catch {
             self.error = error.localizedDescription
         }
