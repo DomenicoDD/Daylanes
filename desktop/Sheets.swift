@@ -44,6 +44,15 @@ struct SheetFrame<Content: View, Leading: View>: View {
     let content: () -> Content
     let leading: () -> Leading
     @Environment(\.dismiss) private var dismiss
+    /// The body's natural height, measured inside the scroll view so the sheet hugs short forms.
+    @State private var contentHeight: CGFloat = 0
+
+    /// Room for the body once the header, footer and some margin are taken from the screen, so long forms scroll
+    /// instead of running off the bottom of the display.
+    private var maxContentHeight: CGFloat {
+        let screen = NSScreen.main?.visibleFrame.height ?? 800
+        return max(240, screen - 260)
+    }
 
     init(title: String, dot: Color? = nil, chips: [String] = [], subtitle: String? = nil, monoSubtitle: Bool = false,
          primary: String, cancelTitle: String = "Cancel", canSubmit: Bool = true, busy: Bool = false, width: CGFloat = 520,
@@ -67,10 +76,21 @@ struct SheetFrame<Content: View, Leading: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            VStack(alignment: .leading, spacing: 16, content: content)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 22)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16, content: content)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 22)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { contentHeight = proxy.size.height }
+                                .onChange(of: proxy.size.height) { _, height in contentHeight = height }
+                        }
+                    }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: min(contentHeight, maxContentHeight))
             footer
         }
         .frame(width: width)
