@@ -161,6 +161,14 @@ struct DiaryChecks {
         try check(selected.standup == final.standup && selected.entries.flatMap { $0.content.allSources } == [source]
                   && selected.entries.flatMap(\.details).map(\.title).contains("Suggested next"), "project scopes copy, details and sources")
 
+        let ranged = try DiaryStore.entries(db, from: tuesday.adding(days: -3).iso, through: thursday.iso)
+        let rows = DiaryTimeline.rows(ranged, from: tuesday.adding(days: -3), through: thursday)
+        try check(ranged.count == entries.count && rows.map(\.id) == ["quiet/" + thursday.iso, "quiet/" + wednesday.iso,
+                  tuesday.iso, "quiet/" + tuesday.adding(days: -3).iso], "timeline keeps today apart and folds quiet days")
+        if case let .quiet(from, to) = rows[3] {
+            try check(from == tuesday.adding(days: -3).iso && to == tuesday.adding(days: -1).iso, "quiet stretch spans its days")
+        }
+
         let fake = root.appendingPathComponent("fake-agent")
         let marker = root.appendingPathComponent("receipt")
         try "#!/bin/sh\nprintf '%s\\n' \"$@\" > receipt\n".write(to: fake, atomically: true, encoding: .utf8)

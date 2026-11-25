@@ -191,6 +191,41 @@ struct DiaryPageData {
     }
 }
 
+/// The Diary page's timeline, newest first: one row per workday with entries, and quiet stretches folded into
+/// a single row. The current workday always gets its own row, since its entry is still to come.
+enum DiaryTimeline {
+    enum Row: Identifiable {
+        case day(String, [DiaryEntry])
+        /// Days with no entry, from the oldest to the newest.
+        case quiet(from: String, to: String)
+
+        var id: String {
+            switch self {
+            case let .day(day, _): day
+            case let .quiet(from, _): "quiet/" + from
+            }
+        }
+    }
+
+    static func rows(_ entries: [DiaryEntry], from first: Day, through last: Day) -> [Row] {
+        guard first <= last else { return [] }
+        let byDay = Dictionary(grouping: entries, by: \.day)
+        var rows: [Row] = []
+        for ordinal in stride(from: last.ordinal, through: first.ordinal, by: -1) {
+            let day = Day(ordinal: ordinal).iso
+            if let entries = byDay[day], !entries.isEmpty {
+                rows.append(.day(day, entries))
+            } else if case let .quiet(_, to)? = rows.last, to != last.iso {
+                // Rows run newest first, so a quiet stretch grows backwards to an older `from`.
+                rows[rows.count - 1] = .quiet(from: day, to: to)
+            } else {
+                rows.append(.quiet(from: day, to: day))
+            }
+        }
+        return rows
+    }
+}
+
 enum DiaryStore {
     static let changed = Notification.Name("com.domenicodidonna.tracker.diaryChanged")
 
@@ -234,6 +269,12 @@ enum DiaryStore {
 
     static func entries(_ db: Database, day: String) throws -> [DiaryEntry] {
         try db.query(entriesSQL + " WHERE work_date = ? ORDER BY p.name COLLATE NOCASE, p.name", [day]).map(entry)
+    }
+
+    /// Entries from `first` through `last` (ISO days), newest day first.
+    static func entries(_ db: Database, from first: String, through last: String) throws -> [DiaryEntry] {
+        try db.query(entriesSQL + " WHERE work_date BETWEEN ? AND ? ORDER BY work_date DESC, p.name COLLATE NOCASE, p.name",
+                     [first, last]).map(entry)
     }
 
     static func entry(_ db: Database, project: String, day: String) throws -> DiaryEntry? {
