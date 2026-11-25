@@ -83,7 +83,7 @@ struct TodayPanel: View {
                         .accessibilityLabel("Open today’s timeline")
                         .help("Open today’s timeline")
                 }
-                SheetSegments(selection: $source, options: DayCalendar.Source.allCases.map { ($0, $0.title) })
+                SheetSegments(selection: $source, options: DayCalendar.Source.allCases.map { ($0, $0 == .claude ? "Claude" : $0.title) })
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("Activity source")
             }
