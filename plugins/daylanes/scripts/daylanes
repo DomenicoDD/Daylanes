@@ -1,0 +1,22 @@
+#!/bin/sh
+# Runs the command-line tool inside the installed Daylanes app with the arguments given,
+# for example `daylanes mcp` (the local MCP server) or `daylanes diary list`.
+# Nothing is downloaded: if Daylanes is not installed, this prints where to get it and exits.
+set -eu
+
+for app in "${DAYLANES_APP:-}" /Applications/Daylanes.app "$HOME/Applications/Daylanes.app"; do
+  if [ -n "$app" ] && [ -x "$app/Contents/MacOS/TrackerCLI" ]; then
+    exec "$app/Contents/MacOS/TrackerCLI" "$@"
+  fi
+done
+
+if [ -x /usr/bin/mdfind ]; then
+  app="$(/usr/bin/mdfind "kMDItemCFBundleIdentifier == 'com.domenicodidonna.tracker'" 2>/dev/null | head -n 1)"
+  if [ -n "$app" ] && [ -x "$app/Contents/MacOS/TrackerCLI" ]; then
+    exec "$app/Contents/MacOS/TrackerCLI" "$@"
+  fi
+fi
+
+echo "Daylanes is not installed. Download it from https://daylanes.app/download, open it once, then try again." >&2
+echo "If it lives somewhere else, set DAYLANES_APP to the path of Daylanes.app." >&2
+exit 1

@@ -193,6 +193,17 @@ claude mcp add --scope user --transport stdio tracker -- "$tracker_cli" mcp
 
 The server runs locally over stdio and reads the ledger directly, so it works with the app closed. Read access includes projects, rules, the installed app catalog, activity and billing reports. Some data is also available as `tracker://` resources. Turn on **Allow project and rule setup** in Daylanes’ **Connect an agent** dialog or start the server with `--access write` to let an agent set up clients, projects, folder mappings and tracking rules. For example, the agent can find Xcode with `list_installed_apps` and map the returned app identifier to a project with `create_tracking_rule`. Rules set up this way appear in **Timeline → Rules**. `--toolsets core,billing,admin,setup` trims the list, and `--db` or `TRACKER_DB` selects another ledger. Results become available to the connected agent and can be included in its model context. See [MCP queries](docs/MCP_QUERIES.md) for example calls.
 
+### Plugin for Claude and Codex
+
+[`plugins/daylanes`](plugins/daylanes) packages the MCP server with two skills, one that writes the project Diary and one that answers time and cost questions, for Claude Code, Claude Cowork, Codex and the ChatGPT desktop app. It runs the `TrackerCLI` inside the installed app, so it needs Daylanes on the Mac.
+
+```sh
+claude plugin marketplace add DomenicoDD/Daylanes && claude plugin install daylanes@daylanes
+codex plugin marketplace add DomenicoDD/Daylanes
+```
+
+`diary list` prints every diary you set up with its routine ID and the project's folders, so an agent started outside Daylanes can find the right one.
+
 ## Project diary
 
 Open **Diary → Set up diary…**, choose a project, and keep or edit the prefilled brief.

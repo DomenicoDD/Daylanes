@@ -1,0 +1,33 @@
+{
+  "name": "daylanes",
+  "version": "0.1.0",
+  "description": "Connects Codex to Daylanes, the local Mac time tracker for consultants: ask about hours, agent usage and costs per client and project, and write the daily project Diary. Requires the Daylanes app on macOS.",
+  "author": {
+    "name": "Domenico Marco Di Donna",
+    "email": "support@daylanes.app",
+    "url": "https://daylanes.app"
+  },
+  "homepage": "https://daylanes.app",
+  "repository": "https://github.com/DomenicoDD/Daylanes",
+  "license": "MIT",
+  "keywords": ["time-tracking", "timesheet", "billing", "invoicing", "agent-usage", "diary", "standup", "macos"],
+  "skills": "./skills/",
+  "mcpServers": "./codex.mcp.json",
+  "requires_local_executor": true,
+  "interface": {
+    "displayName": "Daylanes",
+    "shortDescription": "Local time and agent costs",
+    "longDescription": "Daylanes is a Mac app that tracks consultant time, coding-agent usage and costs per client and project, entirely on your Mac. This plugin lets Codex answer questions such as how many hours and how much agent spend went into a client this month, find agent work with no project, and write the daily project Diary from your agent's own sources. Everything runs locally through the command-line tool inside Daylanes.app; nothing is sent anywhere by the plugin. Requires Daylanes on macOS (daylanes.app/download).",
+    "developerName": "Domenico Marco Di Donna",
+    "category": "Productivity",
+    "capabilities": [],
+    "websiteURL": "https://daylanes.app",
+    "supportURL": "https://github.com/DomenicoDD/Daylanes/issues",
+    "privacyPolicyURL": "https://daylanes.app/privacy",
+    "termsOfServiceURL": "https://daylanes.app/terms",
+    "defaultPrompt": "How many hours and how much agent spend went into each client this week?",
+    "brandColor": "#1F1B16",
+    "composerIcon": "./assets/logo.png",
+    "logo": "./assets/logo.png"
+  }
+}
