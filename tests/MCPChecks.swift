@@ -40,7 +40,7 @@ struct MCPChecks {
         try setup("project", "add", "Right", "--kind=billable", "--client=Acme", "--github", "acme/shared")
         try setup("focus", "save-rule", "--project", "Shop", "--field", "domain", "--keyword", "acme.example")
 
-        var session = MCP.Session(options: MCP.Options(databasePath: database))
+        var session = MCP.Session(options: MCP.Options(databasePath: database, lockReason: { nil }))
         var nextID = 0
         func send(_ method: String, _ params: String = "{}") throws -> JSON {
             nextID += 1
@@ -62,7 +62,7 @@ struct MCPChecks {
         check(hello["serverInfo"]["name"].stringValue == "tracker", "the server names itself")
         check(hello["capabilities"]["tools"].pairs != nil && hello["capabilities"]["resources"].pairs != nil, "capabilities")
         check(hello["instructions"].stringValue?.contains("read-only") == true, "instructions say the connection is read-only")
-        var other = MCP.Session(options: MCP.Options(databasePath: database))
+        var other = MCP.Session(options: MCP.Options(databasePath: database, lockReason: { nil }))
         let future = MCP.answer("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2099-01-01\"}}",
                                 session: &other).flatMap { try? JSON.parse($0) }
         check(future?["result"]["protocolVersion"].stringValue == MCP.protocolVersions[0], "an unknown version gets the newest")
@@ -210,7 +210,7 @@ struct MCPChecks {
         check(try send("resources/read", "{\"uri\": \"tracker://week/soon\"}")["error"]["code"].intValue == -32603, "a bad day is an error")
 
         // Toolsets and the command line
-        var core = MCP.Session(options: MCP.Options(databasePath: database, toolsets: ["core"]))
+        var core = MCP.Session(options: MCP.Options(databasePath: database, toolsets: ["core"], lockReason: { nil }))
         core.initialized = true
         check(!core.tools.contains { $0.name == "list_rules" } && core.tools.contains { $0.name == "get_status" },
               "toolsets trim the list")
@@ -221,7 +221,7 @@ struct MCPChecks {
         check(MCP.run(arguments: ["mcp", "--nope"]) == 2, "unknown options are refused")
 
         // Setup with write access
-        session = MCP.Session(options: MCP.Options(databasePath: database, access: .write))
+        session = MCP.Session(options: MCP.Options(databasePath: database, access: .write, lockReason: { nil }))
         let welcome = try send("initialize", "{\"protocolVersion\": \"2025-06-18\"}")["result"]["instructions"].stringValue ?? ""
         check(!welcome.contains("read-only") && welcome.contains("set_up_project"), "write access explains the setup tools")
         let writable = try send("tools/list")["result"]["tools"].arrayValue ?? []
@@ -319,12 +319,39 @@ struct MCPChecks {
               "setting a project on an ignored rule resumes tracking")
         let missing = try tool("update_tracking_rule", #"{"id":"missing","tag":"Meeting"}"#)
         check(missing["structuredContent"]["error"]["code"] == .string("not_found"), "editing a missing rule never creates it")
-        var plain = MCP.Session(options: MCP.Options(databasePath: database))
+        var plain = MCP.Session(options: MCP.Options(databasePath: database, lockReason: { nil }))
         plain.initialized = true
         check(!plain.tools.contains { $0.toolset == "setup" }, "a read connection never gets the setup tools")
-        var trimmed = MCP.Session(options: MCP.Options(databasePath: database, access: .write, toolsets: ["core"]))
+        var trimmed = MCP.Session(options: MCP.Options(databasePath: database, access: .write, toolsets: ["core"], lockReason: { nil }))
         trimmed.initialized = true
         check(!trimmed.tools.contains { $0.toolset == "setup" }, "toolsets can leave the setup tools out")
+
+        // Licence lock (core/LicenceStamp.swift)
+        let stampPath = folder.appendingPathComponent("licence-stamp.json").path
+        check(LicenceStamp.lockReason(path: stampPath) != nil, "no stamp yet locks the tools")
+        try LicenceStamp.write(.init(licensed: false, trialEndsAt: .now.addingTimeInterval(3600)), to: stampPath)
+        check(LicenceStamp.lockReason(path: stampPath) == nil, "a running trial unlocks the tools")
+        try LicenceStamp.write(.init(licensed: false, trialEndsAt: .now.addingTimeInterval(-60)), to: stampPath)
+        check(LicenceStamp.lockReason(path: stampPath) != nil, "an ended trial locks the tools")
+        try LicenceStamp.write(.init(licensed: true, trialEndsAt: .now.addingTimeInterval(-60)), to: stampPath)
+        check(LicenceStamp.lockReason(path: stampPath) == nil, "a licence unlocks the tools after the trial")
+
+        var lockedSession = MCP.Session(options: MCP.Options(databasePath: database, access: .write,
+                                                             lockReason: { "Your Daylanes trial has ended." }))
+        let lockedHello = MCP.answer(#"{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}"#, session: &lockedSession)
+        check(lockedHello?.contains("trial has ended") == true, "a locked server says so in its instructions")
+        check(lockedSession.tools.map(\.name) == ["get_status"], "a locked server offers only get_status")
+        let lockedCall = try JSON.parse(MCP.answer(
+            #"{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_projects", "arguments": {}}}"#,
+            session: &lockedSession) ?? "")["result"]
+        check(lockedCall["isError"] == .bool(true)
+              && lockedCall["structuredContent"]["error"]["code"] == .string("trial_ended"),
+              "a locked tool answers trial_ended, not unknown tool")
+        let lockedStatus = try JSON.parse(MCP.answer(
+            #"{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "get_status", "arguments": {}}}"#,
+            session: &lockedSession) ?? "")["result"]["structuredContent"]["data"]
+        check(lockedStatus["locked"] == .bool(true) && lockedStatus["locked_reason"].stringValue != nil,
+              "get_status reports the lock")
 
         if failures > 0 {
             print("\(failures) MCP check(s) failed")

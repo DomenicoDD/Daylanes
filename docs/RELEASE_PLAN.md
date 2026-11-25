@@ -423,6 +423,13 @@ Domenico creates the Polar organization himself (identity and bank details).
 4. **After the trial.** Decided by Domenico on 2026-11-22: the app becomes unusable and only
    prompts to buy or enter a licence key (`desktop/LicenceGate.swift`). Tracking keeps running
    behind the lock, following the always-on rule; Domenico hasn't confirmed that part. A copy with a key is not locked when it is offline.
+   The agent tools lock too (Domenico, 2026-11-25): the MCP server, `tracker call` and
+   `tracker diary` read a stamp the app writes to
+   `~/Library/Application Support/Daylanes/licence-stamp.json` (`core/LicenceStamp.swift`),
+   because a Keychain prompt would block an agent-started process. After the trial without a key,
+   only `get_status` answers (with `locked` and the reason); other tools return `trial_ended`. No
+   stamp (the app was never opened) also locks. The stamp is not signed: Daylanes is open source,
+   so a key in the code would be public, and anyone can build without the lock anyway.
 
 Someone can wipe the Keychain to get a new install ID and a new trial. That is rare and
 acceptable for a 49 USD app.

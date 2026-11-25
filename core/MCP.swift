@@ -32,6 +32,9 @@ enum MCP {
         /// Limits the regular connection to toolsets. A Diary connection is always project-scoped.
         var toolsets: Set<String>?
         var diaryRoutine: UUID?
+        /// Why the tools are locked (trial over, no licence), or nil. Asked on every request, so a trial that
+        /// ends while an agent is connected locks from the next call (core/LicenceStamp.swift).
+        var lockReason: () -> String? = { LicenceStamp.lockReason() }
     }
 
     /// A resource a client can attach: the same data as a tool, under a `tracker://` address.
@@ -70,6 +73,9 @@ enum MCP {
 
         /// Diary connections are bound to one project and expose only its diary tools.
         var tools: [MCPTool] {
+            // After the trial only get_status answers; a Diary connection has no tools at all.
+            let locked = options.lockReason() != nil
+            if locked, options.diaryRoutine != nil { return [] }
             if let id = options.diaryRoutine {
                 return DiaryOperations.tools.filter { $0.name != "submit_diary_entry" || options.access == .write }.map { tool in
                     var tool = tool
@@ -78,6 +84,7 @@ enum MCP {
                 }
             }
             return MCPTools.all.filter { tool in
+                if locked, tool.name != "get_status" { return false }
                 guard let operation = Engine.operation(tool.operation) else { return false }
                 if operation.effect != .read {
                     guard options.access == .write, tool.toolset == "setup", operation.effect == .config else { return false }
@@ -119,14 +126,22 @@ enum MCP {
                     ])),
                     ("serverInfo", .object([("name", .string("tracker")), ("title", .string("Daylanes")),
                                             ("version", .string(MCP.serverVersion))])),
-                    ("instructions", .string(diaryGuide ?? MCP.instructions(options.access, diary: options.diaryRoutine != nil))),
+                    ("instructions", .string(options.lockReason().map {
+                        "\($0) Until then only get_status answers; tell the person this instead of guessing their data."
+                    } ?? diaryGuide ?? MCP.instructions(options.access, diary: options.diaryRoutine != nil))),
                 ]))
             case "ping":
                 return MCP.success(id: id, .object([]))
             case "tools/list" where initialized:
                 return MCP.success(id: id, .object([("tools", .array(tools.map(MCP.describe)))]))
             case "tools/call" where initialized:
-                guard let name = params["name"].stringValue, let tool = tools.first(where: { $0.name == name }) else {
+                guard let name = params["name"].stringValue else { return MCP.failure(id: id, code: -32602, "Unknown tool") }
+                guard let tool = tools.first(where: { $0.name == name }) else {
+                    // A tool the client listed before the trial ended: say why, so the agent can tell the person.
+                    if let reason = options.lockReason(),
+                       (MCPTools.all + DiaryOperations.tools).contains(where: { $0.name == name }) {
+                        return MCP.success(id: id, MCP.lockedResult(reason))
+                    }
                     return MCP.failure(id: id, code: -32602, "Unknown tool")
                 }
                 return MCP.success(id: id, call(tool, params["arguments"]).result)
@@ -194,7 +209,12 @@ enum MCP {
                     DistributedNotificationCenter.default().postNotificationName(DiaryStore.changed, object: nil,
                                                                                  userInfo: nil, deliverImmediately: true)
                 }
-                if tool.name == "get_status" { data.set("access", .string(options.access.rawValue)) }
+                if tool.name == "get_status" {
+                    data.set("access", .string(options.access.rawValue))
+                    let reason = options.lockReason()
+                    data.set("locked", .bool(reason != nil))
+                    if let reason { data.set("locked_reason", .string(reason)) }
+                }
                 let db = try Schema.open(options.databasePath)
                 envelope = .object([
                     ("schema", .string(MCP.schemaName)), ("currency", .string(try Store.currency(db))),
@@ -228,6 +248,16 @@ enum MCP {
                 ("title", .string(tool.title)), ("readOnlyHint", .bool(reads)), ("destructiveHint", .bool(false)),
                 ("idempotentHint", .bool(true)), ("openWorldHint", .bool(false)),
             ])),
+        ])
+    }
+
+    /// The answer to any tool but get_status while the tools are locked.
+    static func lockedResult(_ reason: String) -> JSON {
+        let envelope = errorEnvelope(code: "trial_ended", reason)
+        return .object([
+            ("content", .array([.object([("type", .string("text")), ("text", .string(envelope.pythonText(indent: nil)))])])),
+            ("structuredContent", envelope),
+            ("isError", .bool(true)),
         ])
     }
 

@@ -36,6 +36,11 @@ if arguments.first == "call" {
             exit(2)
         }
     }
+    // `tracker call` is how an agent without MCP reaches the same operations, so it locks with the MCP.
+    if let reason = LicenceStamp.lockReason() {
+        FileHandle.standardError.write(Data("tracker: \(reason)\n".utf8))
+        exit(3)
+    }
     do {
         let result = try Engine.call(name, params, context: OperationContext(databasePath: database, actor: .cli))
         print(result.pythonText())
@@ -58,6 +63,10 @@ do {
         rest = rest.dropFirst(2)
     }
     if rest.first == "diary" {
+        if let reason = LicenceStamp.lockReason() {
+            FileHandle.standardError.write(Data("tracker: \(reason)\n".utf8))
+            exit(3)
+        }
         let cli = Bundle.main.executablePath ?? CommandLine.arguments[0]
         let (status, text) = DiaryCLI.run(Array(rest.dropFirst()), database: database, cli: cli) {
             FileHandle.standardInput.readDataToEndOfFile()
