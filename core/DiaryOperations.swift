@@ -39,7 +39,10 @@ enum DiaryOperations {
             } else {
                 details = .null
             }
-            return .object([("project", projectInfo), ("brief", .string(routine.brief)), ("work", details)])
+            // Nothing due on the schedule: name the workday to write if the person asked for an entry now.
+            let latest: JSON = work == nil && day == nil ? .string(try DiaryStore.latestDay(db).iso) : .null
+            return .object([("project", projectInfo), ("brief", .string(routine.brief)), ("work", details),
+                            ("latest_work_date", latest)])
         },
         EngineOperation(name: "submit_diary_entry", summary: "Save a draft for this diary project and date.", effect: .reversible) { json, db, _ in
             let params = Params(json)
@@ -102,7 +105,7 @@ enum DiaryOperations {
 
     static let tools = [
         MCPTool(name: "get_diary_work", title: "Get the current Diary brief",
-                description: "Read this connection’s project, current brief and oldest due workday, including any saved draft. Omit work_date for scheduled runs. If work is null, there is nothing due.",
+                description: "Read this connection’s project, current brief and oldest due workday, including any saved draft. Omit work_date for scheduled runs. If work is null, nothing is due on the schedule; when the person asked for an entry now, call again with work_date set to the returned latest_work_date.",
                 properties: [("work_date", MCPTools.string("Supply a specific date only for a requested backfill or refresh.", format: "date"))],
                 operation: "get_diary_work", toolset: "diary"),
         MCPTool(name: "submit_diary_entry", title: "Save a Diary draft",
@@ -117,16 +120,16 @@ enum DiaryOperations {
                     ("through", MCPTools.integer("The returned exclusive evidence cutoff in Unix milliseconds.")),
                     ("revision", MCPTools.integer("The returned writer revision, or zero for a new draft.")),
                     ("entry", object([
-                        ("headline", MCPTools.string("One short headline.")),
-                        ("summary", MCPTools.string("A readable account of the workday.")),
-                        ("standup", MCPTools.string("A short spoken update. Omit when the brief does not request one.")),
-                        ("outcomes", MCPTools.string("Outcomes, as plain text with line breaks as needed.")),
-                        ("decisions", MCPTools.string("Decisions that were made.")),
-                        ("blockers", MCPTools.string("What is currently blocked or waiting.")),
-                        ("next_steps", MCPTools.string("Suggested next steps.")),
+                        ("headline", MCPTools.string("One short headline, plain text.")),
+                        ("summary", MCPTools.string("A readable account of the workday, in one or two sentences of light Markdown (bold, code, links).")),
+                        ("standup", MCPTools.string("A short spoken update in plain text, no Markdown. Omit when the brief does not request one.")),
+                        ("outcomes", MCPTools.string("Outcomes, in Markdown: one `- ` bullet per item, **bold** for the key outcome.")),
+                        ("decisions", MCPTools.string("Decisions that were made, as Markdown bullets.")),
+                        ("blockers", MCPTools.string("What is currently blocked or waiting, as Markdown bullets.")),
+                        ("next_steps", MCPTools.string("Suggested next steps, as Markdown bullets.")),
                         ("sections", array(object([
                             ("title", MCPTools.string("A section title requested in the brief. Reuse the same title on refresh.")),
-                            ("text", MCPTools.string("The section’s paragraphs or plain-text list.")),
+                            ("text", MCPTools.string("The section’s text in light Markdown: short paragraphs or `- ` bullets, bold, code and links; no headings or tables.")),
                             ("sources", sources),
                         ], required: ["title", "text"]))),
                         ("sources", sources),

@@ -154,6 +154,7 @@ CREATE INDEX IF NOT EXISTS diary_entries_work_date ON diary_entries(work_date);
         try migrateEntries(db)
         try migrateSettingsData(db)
         try migrateSelfClient(db)
+        try DiaryStore.renameLateWorkdays(db)
         return db
     }
 
