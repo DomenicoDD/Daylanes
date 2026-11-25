@@ -261,7 +261,7 @@ struct DiaryPage: View {
     private func entryView(_ entry: DiaryEntry) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if project == nil {
-                Chip(text: entry.project, tint: .forProject(entry.project))
+                Chip(text: entry.project, dot: ProjectColor.color(for: entry.project))
             }
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(entry.headline)
@@ -273,8 +273,7 @@ struct DiaryPage: View {
                 Spacer(minLength: 0)
                 Button("Edit…", systemImage: "pencil") { editing = entry }
                     .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .foregroundStyle(Theme.secondary)
+                    .foregroundStyle(Theme.Tint.neutral.ink)
                     .accessibilityLabel("Edit \(entry.project) diary")
             }
             if !entry.summary.isEmpty {
