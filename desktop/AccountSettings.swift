@@ -12,13 +12,11 @@ struct AccountSettings: View {
                 Text("Licence").font(.headline).accessibilityAddTraits(.isHeader)
                 statusText
             }
-            if licensing.state?.key == nil || isUpdatesEnded {
+            if licensing.state?.key == nil {
                 buy
                 Divider()
                 enterKey
-            }
-            if licensing.state?.key != nil {
-                if isUpdatesEnded { Divider() }
+            } else {
                 licensed
             }
             if let message = licensing.message {
@@ -27,16 +25,11 @@ struct AccountSettings: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            Text("When the trial ends, Daylanes locks until you activate a licence, and keeps tracking in the background. A licence works forever on up to two Macs and includes \(Licensing.updateMonths) months of updates.")
+            Text("When the trial ends, Daylanes locks until you activate a licence, and keeps tracking in the background. A licence works forever on up to two Macs and includes every future update.")
                 .font(.callout).foregroundStyle(.secondary)
         }
         .disabled(licensing.busy)
         .task { await licensing.start() }
-    }
-
-    private var isUpdatesEnded: Bool {
-        if case .updatesEnded = licensing.status { return true }
-        return false
     }
 
     @ViewBuilder
@@ -51,18 +44,14 @@ struct AccountSettings: View {
         case .licensed:
             VStack(alignment: .leading, spacing: 4) {
                 Text("Licensed to \(owner)")
-                if let until = licensing.updatesUntil {
-                    Text("Updates included until \(until.formatted(date: .long, time: .omitted)).")
-                        .foregroundStyle(.secondary)
-                }
+                Text("Every future update is included.")
+                    .foregroundStyle(.secondary)
             }
         case .checkOverdue:
             VStack(alignment: .leading, spacing: 6) {
                 Text("Daylanes couldn't reach Polar for \(Licensing.offlineGraceDays) days to check your licence. Your key is kept; connect to the internet and check again.")
                 Button("Check Again") { Task { await licensing.validate() } }
             }
-        case let .updatesEnded(since):
-            Text("Your licence includes updates released until \(since.formatted(date: .long, time: .omitted)). This version is newer: renew to keep using it, or go back to the previous version, which keeps working.")
         }
     }
 
@@ -73,7 +62,7 @@ struct AccountSettings: View {
 
     private var buy: some View {
         HStack {
-            Button(isUpdatesEnded ? "Renew updates…" : "Buy for \(licensing.price) USD…") {
+            Button("Buy for \(licensing.price) USD…") {
                 Task { await licensing.buy() }
             }
             .buttonStyle(.borderedProminent)

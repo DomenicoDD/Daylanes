@@ -22,7 +22,5 @@
     <key>TrackerPolarOrganizationID</key><string></string>
     <key>TrackerCheckoutServer</key><string></string>
     <key>TrackerCheckoutLink</key><string></string>
-    <!-- bin/build-desktop writes the build date here (or TRACKER_RELEASE_DATE). -->
-    <key>TrackerReleaseDate</key><string></string>
 </dict>
 </plist>

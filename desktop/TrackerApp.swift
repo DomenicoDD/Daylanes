@@ -15,7 +15,10 @@ struct TrackerApp: App {
                 .frame(minWidth: 870, minHeight: 620)
         }
         .defaultSize(width: 1100, height: 750)
-        .commands { HelpMenuCommands() }
+        .commands {
+            UpdateCommands()
+            HelpMenuCommands()
+        }
         Settings {
             SettingsWindow()
                 .licenceGate()
@@ -337,37 +340,41 @@ struct Dashboard: View {
         .background(Theme.chrome)
         .environment(\.colorScheme, .dark)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack {
-                Menu {
-                    Button("New project…") { sheet = .project(nil, nil) }
-                    Button("New client…") { sheet = .client(nil) }
-                } label: {
-                    Image(systemName: "plus")
-                        .frame(width: 26, height: 26)
-                        .background(Theme.sidebarSelected, in: Circle())
+            VStack(spacing: 8) {
+                UpdateAvailableNotice()
+                HStack {
+                    Menu {
+                        Button("New project…") { sheet = .project(nil, nil) }
+                        Button("New client…") { sheet = .client(nil) }
+                    } label: {
+                        Image(systemName: "plus")
+                            .frame(width: 26, height: 26)
+                            .background(Theme.sidebarSelected, in: Circle())
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("Add a project or client")
+                    .disabled(model.busy != nil)
+                    Spacer()
+                    Button {
+                        openSettings()
+                    } label: {
+                        Label("Settings", systemImage: "slider.horizontal.3")
+                    }
+                    .buttonStyle(CircleButtonStyle(dark: true))
+                    .help("Settings (⌘,)")
+                    .accessibilityLabel("Settings")
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.white.opacity(0.85))
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("Add a project or client")
-                .disabled(model.busy != nil)
-                Spacer()
-                Button {
-                    openSettings()
-                } label: {
-                    Label("Settings", systemImage: "slider.horizontal.3")
-                }
-                .buttonStyle(CircleButtonStyle(dark: true))
-                .help("Settings (⌘,)")
-                .accessibilityLabel("Settings")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(Theme.chrome)
             .environment(\.colorScheme, .dark)
         }
+        .task { UpdateChecker.shared.start() }
         .accessibilityIdentifier("tracker-navigation")
     }
 
