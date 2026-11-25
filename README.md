@@ -168,11 +168,15 @@ The server runs locally over stdio and reads the ledger directly, so it works wi
 
 ## Project diary
 
-Open **Diary → Set up diary…**, choose a project and whether **Codex** or **Claude Code** writes it, and keep or edit the prefilled brief. Pick when it writes: when the workday ends, or at a set time. **Change workday…** sets the cutoff and time zone for every diary. For example, with a 05:00 cutoff in Europe/Rome, Wednesday at 03:15 is part of Tuesday's diary. A run at 03:00 drafts Tuesday through 03:00 and refreshes the same entry after 05:00.
+Open **Diary → Set up diary…**, choose a project, and keep or edit the prefilled brief.
+
+**Write it from any agent:** choose **Copy prompt** and paste it into Codex, Claude Code or any agent that can run commands. The prompt has the agent run `TrackerCLI diary guide ROUTINE_ID`, which prints the steps, the entry format and the project's brief. The agent then reads the due workday with `diary work`, gathers evidence from its own connected sources, and saves the entry with `diary submit`. Nothing has to be registered first.
+
+**Or let Daylanes write it every day:** choose whether **Codex** or **Claude Code** writes it and when: when the workday ends, or at a set time. **Change workday…** sets the cutoff and time zone for every diary. For example, with a 05:00 cutoff in Europe/Rome, Wednesday at 03:15 is part of Tuesday's diary. A run at 03:00 drafts Tuesday through 03:00 and refreshes the same entry after 05:00.
 
 Choose **Turn on**. Daylanes finds the agent's command-line tool (use **Locate…** if it is installed somewhere unusual) and installs a local schedule. When a workday is due, it starts a fresh, non-interactive run in the project folder (`codex exec` or `claude --print`) and passes its Diary MCP server to that run, so there is nothing to register or paste. The connection exposes just two tools: `get_diary_work` fetches the brief and due draft, and `submit_diary_entry` saves the result. The run keeps your agent's own sign-ins, MCP servers and connectors, such as GitHub, Slack, the calendar or meeting notes. Claude Code runs may only call Diary tools without asking, so allow any other tools your brief needs in your Claude Code permission settings.
 
-macOS checks for missed workdays on wake and sign-in, even when Daylanes is closed. **Write now** runs a due workday immediately. The setup sheet shows the last run, and **Run log** opens the agent's output. A failed run waits 15 minutes before the schedule tries again. To write from a conversation of your own instead, open **Use your own agent session instead** for a registration command and instruction.
+macOS checks for missed workdays on wake and sign-in, even when Daylanes is closed. **Write now** runs a due workday immediately. The setup sheet shows the last run, and **Run log** opens the agent's output. A failed run waits 15 minutes before the schedule tries again. To give an agent the Diary as MCP tools instead, open **Connect over MCP instead** for a registration command. That connection introduces itself with the same guide and brief.
 
 In Diary, select the work date, client and project. **Copy** copies the filtered standup. **Edit** changes the displayed wording. Later agent refreshes update any untouched fields and keep your edits.
 

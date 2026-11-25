@@ -192,6 +192,32 @@ struct DiaryChecks {
                   "Claude Code runs get the Diary server through --mcp-config")
         let config = DiarySchedule.configuration(routine.id, database: path, cli: cli, runner: runner)
         try check((config["ProgramArguments"] as? [String])?.count == 7, "the schedule needs no conversation ID")
+        let prompt = DiaryGuide.prompt(project: project, routine: routine.id, cli: "/Apps/Day lanes/TrackerCLI", database: path)
+        try check(prompt.contains("'/Apps/Day lanes/TrackerCLI' --db '\(path)' diary guide \(routine.id.uuidString.lowercased())"),
+                  "the copied prompt runs the guide for this ledger and routine")
+        let (guideStatus, guide) = DiaryCLI.run(["guide", routine.id.uuidString], database: path, cli: "/bin/TrackerCLI") { Data() }
+        try check(guideStatus == 0 && guide.contains(routine.brief) && guide.contains("diary work \(routine.id.uuidString.lowercased())")
+                  && guide.contains("diary submit") && guide.contains("evidence_before"),
+                  "the guide explains the steps, shows the brief and the commands")
+        let (workStatus, workText) = DiaryCLI.run(["work", routine.id.uuidString, "--date", tuesday.iso], database: path,
+                                                  cli: "/bin/TrackerCLI") { Data() }
+        let cliWork = try JSON.parse(workText)["work"]
+        try check(workStatus == 0 && cliWork["work_date"].stringValue == tuesday.iso, "diary work returns the requested workday")
+        let cliEntry = try JSON.parse(DiaryStore.encode(DiaryContent(headline: "Fixtures shipped", summary: "Written from a shell.")))
+        let cliSubmission = JSON.object([("work_date", cliWork["work_date"]), ("window", cliWork["window"]),
+                                         ("through", cliWork["through"]), ("revision", cliWork["revision"]), ("entry", cliEntry)])
+        let (submitStatus, submitText) = DiaryCLI.run(["submit", routine.id.uuidString], database: path, cli: "/bin/TrackerCLI") {
+            Data(cliSubmission.pythonText(indent: nil).utf8)
+        }
+        try check(submitStatus == 0 && (try JSON.parse(submitText))["changed"].boolValue == true
+                  && (try DiaryStore.entry(db, project: project, day: tuesday.iso))?.content.headline == "Fixtures shipped",
+                  "diary submit saves the piped entry")
+        try check(DiaryCLI.run(["publish", routine.id.uuidString], database: path, cli: "x") { Data() }.0 == 2, "unknown diary commands show usage")
+        var greeted = MCP.Session(options: .init(databasePath: path, access: .write, diaryRoutine: routine.id))
+        let hello = try JSON.parse(MCP.answer("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}", session: &greeted) ?? "{}")
+        try check(hello["result"]["instructions"].stringValue?.contains(routine.brief) == true
+                  && hello["result"]["instructions"].stringValue?.contains("submit_diary_entry") == true,
+                  "a Diary MCP connection introduces itself with the guide and brief")
         print("Diary checks passed")
     }
 }

@@ -25,6 +25,7 @@ struct DiarySetupSheet: View {
     @State private var attempt: DiarySchedule.Attempt?
     @State private var busy = false
     @State private var error: String?
+    @State private var copied = false
 
     init(database: String, projects: [Project], project: String?, didChange: @escaping (String) -> Void) {
         self.database = database
@@ -52,12 +53,6 @@ struct DiarySetupSheet: View {
                 form
             }
         } leading: {
-            if !isOn {
-                Button("Save without schedule") { save(schedule: false) }
-                    .buttonStyle(SheetButtonStyle(kind: .link))
-                    .disabled(busy || project.isEmpty || routine.brief.pythonStripped.isEmpty)
-                    .help("Save the brief and use your own agent session to write the diary")
-            }
             if isOn {
                 Button("Turn off") { turnOff() }
                     .buttonStyle(SheetButtonStyle(kind: .destructive))
@@ -81,10 +76,6 @@ struct DiarySetupSheet: View {
                 SheetMenu(selection: $project, groups: [projects.map { ($0.name, $0.name) }])
             }
         }
-        SheetField(label: "Written by") {
-            SheetSegments(selection: $routine.agent, options: DiaryAgent.allCases.map { ($0, $0.title) })
-            agentLine
-        }
         SheetField(label: "Brief", note: "what to read and how to write") {
             TextEditor(text: $routine.brief)
                 .font(.system(size: 13))
@@ -98,6 +89,27 @@ struct DiarySetupSheet: View {
                 Button("Restore the default brief") { routine.brief = DiaryRoutine.briefTemplate }
                     .buttonStyle(SheetButtonStyle(kind: .link))
             }
+        }
+        SheetGroup {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Write it from any agent").font(.system(size: 13, weight: .semibold))
+                    Text("Paste one prompt into Codex, Claude Code or another agent. It gets the steps and this brief from Daylanes and saves the entry here.")
+                        .font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Button(copied ? "Copied" : "Copy prompt", systemImage: copied ? "checkmark" : "doc.on.doc") { copyPrompt() }
+                    .buttonStyle(SheetButtonStyle(kind: .primary))
+                    .disabled(busy || project.isEmpty || routine.brief.pythonStripped.isEmpty)
+                    .accessibilityIdentifier("diary-copy-prompt")
+            }
+        }
+        Text("Or let Daylanes write it every day").font(.system(size: 13, weight: .semibold))
+            .padding(.top, 4)
+        SheetField(label: "Written by") {
+            SheetSegments(selection: $routine.agent, options: DiaryAgent.allCases.map { ($0, $0.title) })
+            agentLine
         }
         SheetField(label: "When") {
             SheetSegments(selection: $setTime, options: [(false, "When the workday ends"), (true, "At a set time")])
@@ -145,7 +157,7 @@ struct DiarySetupSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         if let saved, let cli {
-            DisclosureGroup("Use your own agent session instead") {
+            DisclosureGroup("Connect over MCP instead") {
                 manualSetup(saved, cli: cli).padding(.top, 8)
             }
             .font(.system(size: 12, weight: .medium))
@@ -282,6 +294,8 @@ struct DiarySetupSheet: View {
             var value = routine
             value.runMinute = setTime ? try DiaryClock.minutes(runAt) : nil
             if saved == nil { value.firstDay = clock.calendarDay(.now).adding(days: -1).iso }
+            // Saving without the schedule keeps the scheduled agent, so a running schedule doesn't stop matching.
+            if !schedule, let installed { value.agent = installed.agent }
             let runner = DiarySchedule.Runner(agent: value.agent, executable: executable, directory: folder)
             if schedule { try DiarySchedule.validate(runner) }
             let db = try Schema.open(database)
@@ -297,6 +311,21 @@ struct DiarySetupSheet: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Saves the brief, then copies a prompt that has the agent run `diary guide` for this project.
+    private func copyPrompt() {
+        guard let cli else {
+            error = "This Daylanes build is missing its command-line tool."
+            return
+        }
+        error = nil
+        save(schedule: false)
+        guard error == nil, let saved else { return }
+        NSPasteboard.general.clearContents()
+        copied = NSPasteboard.general.setString(DiaryGuide.prompt(project: project, routine: saved.id, cli: cli,
+                                                                  database: database), forType: .string)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { copied = false }
     }
 
     private func turnOff() {

@@ -102,6 +102,14 @@ enum MCP {
                 let asked = params["protocolVersion"].stringValue
                 let version = asked.flatMap { MCP.protocolVersions.contains($0) ? $0 : nil } ?? MCP.protocolVersions[0]
                 initialized = true
+                // A Diary connection introduces itself with the full guide and the project's brief.
+                var diaryGuide: String?
+                if let routine = options.diaryRoutine, let db = try? Database.readOnly(options.databasePath),
+                   let project = try? DiaryStore.project(db, routine: routine),
+                   let saved = try? DiaryStore.routine(db, project: project) {
+                    diaryGuide = DiaryGuide.text(project: project, client: try? Store.project(db, project)["client"].string,
+                                                 brief: saved.brief, channel: .mcp)
+                }
                 return MCP.success(id: id, .object([
                     ("protocolVersion", .string(version)),
                     ("capabilities", .object([
@@ -110,7 +118,7 @@ enum MCP {
                     ])),
                     ("serverInfo", .object([("name", .string("tracker")), ("title", .string("Daylanes")),
                                             ("version", .string(MCP.serverVersion))])),
-                    ("instructions", .string(MCP.instructions(options.access, diary: options.diaryRoutine != nil))),
+                    ("instructions", .string(diaryGuide ?? MCP.instructions(options.access, diary: options.diaryRoutine != nil))),
                 ]))
             case "ping":
                 return MCP.success(id: id, .object([]))
