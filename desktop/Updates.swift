@@ -13,6 +13,8 @@ final class UpdateChecker: ObservableObject {
     @Published private(set) var checking = false
 
     private var started = false
+    /// The request under way, shared so a manual check during a background one still gets an answer.
+    private var inFlight: Task<UpdateFeed?, Error>?
     private let interval: TimeInterval = 6 * 3600
 
     var installedVersion: String {
@@ -33,7 +35,6 @@ final class UpdateChecker: ObservableObject {
 
     /// Check for Updates…: always answers, even when nothing is new or the check fails.
     func checkNow() {
-        guard !checking else { return }
         Task {
             let alert = NSAlert()
             do {
@@ -77,11 +78,22 @@ final class UpdateChecker: ObservableObject {
         if let link { NSWorkspace.shared.open(link) }
     }
 
-    /// Downloads the feed and returns it when it names a newer version than this one.
+    /// Downloads the feed and returns it when it names a newer version than this one. A call made
+    /// while a request is under way waits for that request instead of starting another.
     @discardableResult
     private func fetch() async throws -> UpdateFeed? {
+        if let inFlight { return try await inFlight.value }
+        let task = Task { try await loadFeed() }
+        inFlight = task
         checking = true
-        defer { checking = false }
+        defer {
+            inFlight = nil
+            checking = false
+        }
+        return try await task.value
+    }
+
+    private func loadFeed() async throws -> UpdateFeed? {
         var request = URLRequest(url: UpdateFeed.address, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.setValue("Daylanes/\(installedVersion)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
