@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Daylanes",
+  "version": "0.2.0",
+  "description": "Lets the Daylanes time tracker on your Mac see which site you’re working on. Nothing leaves your computer.",
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnh1IhoH8Q26lMMxEHchAxGxWtTYEOrcU2NIwGN8SCfAKHKPHHcJwdQ4OsTS+B8iPP7t6aW7D86DgRRwONgVpsdTu1pLn25+gd3rh4JsFYvD9rHys1dYGIIzv/pkaPnaEGaZcwTYshzWz75xsW+RZrznaNhqUeMeTnuz5dD5Gty3SkXSUROHwXHUv3Q2t4NzSkk6CIASKc9+18FBmVQGcgg/G9MKhr+jETVhOFz6qT3ZY9f83Je9hgkaG9I4wjYl9cfy0FUJJocmzzQGJBMTsvkVUc2fmTA9onpgHJX208iGl4sXghmsIbL/NyHwEuKKKgCQdTB8Z5KGe5YB8zC2nxwIDAQAB",
+  "minimum_chrome_version": "105",
+  "incognito": "not_allowed",
+  "permissions": [
+    "storage",
+    "tabs",
+    "nativeMessaging",
+    "alarms"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "settings.html",
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png"
+    },
+    "default_title": "Daylanes"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'"
+  },
+  "short_name": "Daylanes"
+}

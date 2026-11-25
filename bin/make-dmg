@@ -1,0 +1,102 @@
+#!/bin/sh
+# Packs build/Daylanes.app into a drag-to-Applications disk image with the sand background
+# (assets/dmg, drawn by tools/dmg_background.py). Layout from docs/RELEASE_PLAN.md 1.1:
+# 660 x 400 pt window, 128 pt icons, app at (180, 190), Applications at (480, 190).
+#
+# Usage: bin/make-dmg [path/to/App.app] [output.dmg]
+# Run bin/build-desktop first. Daylanes uses a saved Finder layout. Other app
+# bundle names still use Finder automation to place the icons.
+# Set TRACKER_DMG_SIGN_IDENTITY to codesign the image ("-" skips signing).
+set -eu
+tracker_checkout=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+tracker_app=${1:-"$tracker_checkout/build/Daylanes.app"}
+[ -d "$tracker_app" ] || { echo "make-dmg: $tracker_app not found, run bin/build-desktop first" >&2; exit 1; }
+tracker_app=$(CDPATH= cd -- "$tracker_app" && pwd)
+tracker_app_name=$(basename "$tracker_app")
+tracker_plist="$tracker_app/Contents/Info.plist"
+tracker_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$tracker_plist")
+tracker_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$tracker_plist")
+tracker_dmg=${2:-"$tracker_checkout/build/$tracker_name-$tracker_version.dmg"}
+
+tracker_work=$(mktemp -d)
+tracker_mount=""
+tracker_cleanup() {
+  [ -n "$tracker_mount" ] && hdiutil detach "$tracker_mount" -quiet -force 2>/dev/null || true
+  rm -rf "$tracker_work"
+}
+trap tracker_cleanup EXIT
+
+# Stage the volume contents.
+tracker_stage="$tracker_work/stage"
+mkdir -p "$tracker_stage/.background"
+ditto "$tracker_app" "$tracker_stage/$tracker_app_name"
+ln -s /Applications "$tracker_stage/Applications"
+tiffutil -cathidpicheck "$tracker_checkout/assets/dmg/background.png" \
+  "$tracker_checkout/assets/dmg/background@2x.png" -out "$tracker_stage/.background/background.tiff" >/dev/null
+
+# A writable image first, so the volume root can be marked as having a custom icon.
+tracker_rw="$tracker_work/rw.dmg"
+tracker_kb=$(du -sk "$tracker_stage" | awk '{ print $1 }')
+hdiutil create -quiet -srcfolder "$tracker_stage" -volname "$tracker_name" -fs HFS+ \
+  -format UDRW -size "$((tracker_kb + 20480))k" "$tracker_rw"
+tracker_mount=$(hdiutil attach "$tracker_rw" -readwrite -noverify -noautoopen \
+  | awk -F '\t' '/\/Volumes\// { print $NF; exit }')
+[ -n "$tracker_mount" ] || { echo "make-dmg: could not mount the image" >&2; exit 1; }
+
+if [ "$tracker_app_name" = Daylanes.app ] && [ "$tracker_name" = Daylanes ]; then
+  cp "$tracker_checkout/assets/dmg/FinderLayout.dsstore" "$tracker_mount/.DS_Store"
+else
+  tracker_disk=$(basename "$tracker_mount")
+osascript <<OSA
+tell application "Finder"
+  tell disk "$tracker_disk"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {200, 120, 860, 548}
+    set viewOptions to the icon view options of container window
+    set arrangement of viewOptions to not arranged
+    set icon size of viewOptions to 128
+    set text size of viewOptions to 13
+    set label position of viewOptions to bottom
+    set shows item info of viewOptions to false
+    set shows icon preview of viewOptions to false
+    set background picture of viewOptions to file ".background:background.tiff"
+    set position of item "$tracker_app_name" of container window to {180, 190}
+    set position of item "Applications" of container window to {480, 190}
+    close
+    open
+    update without registering applications
+    delay 2
+    close
+  end tell
+end tell
+OSA
+fi
+
+# The custom-icon flag goes on the volume root (SetFile ships with Xcode).
+if [ -f "$tracker_app/Contents/Resources/AppIcon.icns" ] && xcrun --find SetFile >/dev/null 2>&1; then
+  cp "$tracker_app/Contents/Resources/AppIcon.icns" "$tracker_mount/.VolumeIcon.icns"
+  xcrun SetFile -a C "$tracker_mount"
+fi
+
+chmod -Rf go-w "$tracker_mount" 2>/dev/null || true
+sync
+hdiutil detach "$tracker_mount" -quiet
+tracker_mount=""
+
+mkdir -p "$(dirname "$tracker_dmg")"
+rm -f "$tracker_dmg"
+hdiutil convert -quiet "$tracker_rw" -format UDZO -imagekey zlib-level=9 -o "$tracker_dmg"
+
+tracker_identity=${TRACKER_DMG_SIGN_IDENTITY:-}
+if [ -z "$tracker_identity" ]; then
+  tracker_identity=$(security find-identity -v -p codesigning 2>/dev/null \
+    | awk '/"Developer ID Application: .*\(J7C56736F3\)"/ { print $2; exit }')
+fi
+if [ -n "$tracker_identity" ] && [ "$tracker_identity" != "-" ]; then
+  codesign --force --sign "$tracker_identity" "$tracker_dmg" \
+    || echo "make-dmg: signing the image failed, leaving it unsigned" >&2
+fi
+printf '%s\n' "$tracker_dmg"

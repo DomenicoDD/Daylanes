@@ -1,0 +1,13 @@
+#!/bin/sh
+# Runs the TrackerCLI built by bin/build-desktop, so the checkout's CLI and MCP server use the app's engine.
+set -eu
+tracker_checkout=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+tracker_cli="$tracker_checkout/build/Daylanes.app/Contents/MacOS/TrackerCLI"
+if [ ! -x "$tracker_cli" ]; then
+  tracker_cli="$tracker_checkout/build/Tracker.app/Contents/MacOS/TrackerCLI"
+fi
+if [ ! -x "$tracker_cli" ]; then
+  echo "tracker: run bin/build-desktop first" >&2
+  exit 1
+fi
+exec "$tracker_cli" "$@"

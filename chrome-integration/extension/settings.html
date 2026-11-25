@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daylanes</title>
+<link rel="stylesheet" href="settings.css">
+<main>
+  <h1>Daylanes</h1>
+  <p class="status" id="status" data-state="checking" role="status">Checking the connection to Daylanes…</p>
+  <p id="hint"></p>
+  <form id="settings">
+    <label for="alias">Profile label <span>(optional)</span></label>
+    <input id="alias" autocomplete="off" maxlength="40" placeholder="e.g. Work or Personal">
+    <p id="error" role="alert"></p>
+    <div class="buttons">
+      <button id="toggle" type="button">Pause sharing</button>
+      <button id="save" type="submit">Save label</button>
+    </div>
+  </form>
+  <p class="fine">Only the site and path of the active tab are shared, and only with the Daylanes app on this Mac. <span id="id"></span></p>
+</main>
+<script type="module" src="settings.js"></script>
+</html>

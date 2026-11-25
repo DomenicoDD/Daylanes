@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleExecutable</key><string>Daylanes</string>
+    <!-- Keep the installed app identity stable across display-name changes. -->
+    <key>CFBundleIdentifier</key><string>com.domenicodidonna.tracker</string>
+    <key>CFBundleName</key><string>Daylanes</string>
+    <key>CFBundleDisplayName</key><string>Daylanes</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundleIconName</key><string>AppIcon</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0.4.0</string>
+    <key>CFBundleVersion</key><string>4</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Daylanes reads the active Chrome tab address to match your project rules.</string>
+    <!-- Licensing (desktop/Licensing.swift, docs/POLAR_SETUP.md). -->
+    <key>TrackerPolarAPI</key><string>https://api.polar.sh</string>
+    <key>TrackerPolarOrganizationID</key><string></string>
+    <key>TrackerCheckoutServer</key><string></string>
+    <key>TrackerCheckoutLink</key><string></string>
+    <!-- bin/build-desktop writes the build date here (or TRACKER_RELEASE_DATE). -->
+    <key>TrackerReleaseDate</key><string></string>
+</dict>
+</plist>

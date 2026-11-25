@@ -1,0 +1,64 @@
+#!/bin/sh
+# Builds, signs, notarizes, staples and checks the Daylanes DMG (docs/RELEASE_PLAN.md section 5).
+# Usage: bin/release [arm64|x86_64]. An explicit architecture is added to the filename.
+# Uploads only to Apple's notary service. It does not publish anything.
+#
+# Needs the Developer ID Application certificate and a notarytool keychain profile
+# (tracker-notary, or set TRACKER_NOTARY_PROFILE).
+set -eu
+tracker_checkout=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$tracker_checkout"
+tracker_arch=${1:-$(uname -m)}
+case "$tracker_arch" in
+  arm64|x86_64) ;;
+  *) echo "Usage: bin/release [arm64|x86_64]" >&2; exit 2 ;;
+esac
+[ "$#" -le 1 ] || { echo "Usage: bin/release [arm64|x86_64]" >&2; exit 2; }
+tracker_suffix=${1:+-$tracker_arch}
+tracker_profile=${TRACKER_NOTARY_PROFILE:-tracker-notary}
+tracker_identity=$(security find-identity -v -p codesigning \
+  | awk '/"Developer ID Application: .*\(J7C56736F3\)"/ { print $2; exit }')
+[ -n "$tracker_identity" ] || { echo "release: no Developer ID Application certificate" >&2; exit 1; }
+
+# notarytool can't read its profile while the screen is locked, so find out before building.
+xcrun notarytool history --keychain-profile "$tracker_profile" >/dev/null || {
+  echo "release: can't use the notary profile $tracker_profile (is the screen locked?)" >&2
+  exit 1
+}
+
+mkdir -p "$tracker_checkout/build"
+tracker_stage=$(mktemp -d "$tracker_checkout/build/release-$tracker_arch.XXXXXX")
+TRACKER_ARCH="$tracker_arch" TRACKER_BUILD_DIR="$tracker_stage" TRACKER_ENABLE_PAYMENTS=1 ./bin/build-desktop >/dev/null
+tracker_app="$tracker_stage/Daylanes.app"
+tracker_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$tracker_app/Contents/Info.plist")
+tracker_final="$tracker_checkout/build/Daylanes-$tracker_version$tracker_suffix.dmg"
+# The release name only ever holds a notarized, stapled image.
+tracker_dmg="$tracker_stage/Daylanes-$tracker_version$tracker_suffix.unnotarized.dmg"
+
+# Inside out: the helpers first, then the bundle.
+for tracker_binary in Daylanes TrackerChromeHost TrackerCLI TrackerUnzstd; do
+  [ "$(xcrun lipo -archs "$tracker_app/Contents/MacOS/$tracker_binary")" = "$tracker_arch" ] || {
+    echo "release: $tracker_binary is not built for $tracker_arch" >&2
+    exit 1
+  }
+done
+for tracker_binary in TrackerChromeHost TrackerCLI TrackerUnzstd; do
+  codesign --force --options runtime --timestamp --sign "$tracker_identity" \
+    "$tracker_app/Contents/MacOS/$tracker_binary"
+done
+codesign --force --options runtime --timestamp --entitlements desktop/Tracker.entitlements \
+  --sign "$tracker_identity" "$tracker_app"
+codesign --verify --deep --strict "$tracker_app"
+
+TRACKER_DMG_SIGN_IDENTITY=- ./bin/make-dmg "$tracker_app" "$tracker_dmg" >/dev/null
+codesign --force --timestamp --sign "$tracker_identity" "$tracker_dmg"
+
+# notarytool can exit 0 for a rejected submission; stapling then fails and stops the script.
+xcrun notarytool submit "$tracker_dmg" --keychain-profile "$tracker_profile" --wait
+xcrun stapler staple "$tracker_dmg"
+xcrun stapler validate "$tracker_dmg"
+spctl -a -vvv -t open --context context:primary-signature "$tracker_dmg"
+spctl -a -vvv "$tracker_app"
+mv -f "$tracker_dmg" "$tracker_final"
+rm -rf "$tracker_stage"
+shasum -a 256 "$tracker_final"

@@ -1,0 +1,124 @@
+#!/bin/sh
+set -eu
+tracker_checkout=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$tracker_checkout"
+tracker_arch=${TRACKER_ARCH:-$(uname -m)}
+case "$tracker_arch" in
+  arm64|x86_64) ;;
+  *) echo "build-desktop: unsupported architecture: $tracker_arch" >&2; exit 2 ;;
+esac
+tracker_payments=${TRACKER_ENABLE_PAYMENTS:-0}
+tracker_calendar=${TRACKER_ENABLE_GOOGLE_CALENDAR:-0}
+case "$tracker_payments:$tracker_calendar" in
+  [01]:[01]) ;;
+  *) echo "build-desktop: TRACKER_ENABLE_PAYMENTS and TRACKER_ENABLE_GOOGLE_CALENDAR must be 0 or 1" >&2; exit 2 ;;
+esac
+if [ "$tracker_calendar" = 1 ] && [ -n "${TRACKER_GOOGLE_CALENDAR_CLIENT_FILE:-}" ]; then
+  tracker_calendar_client_id=$(/usr/bin/plutil -extract installed.client_id raw -expect string -o - \
+    "$TRACKER_GOOGLE_CALENDAR_CLIENT_FILE" 2>/dev/null) || {
+    echo "build-desktop: choose a Google OAuth Desktop client JSON" >&2; exit 2
+  }
+  case "$tracker_calendar_client_id" in
+    ?*.apps.googleusercontent.com) ;;
+    *) echo "build-desktop: invalid Google OAuth Desktop client ID" >&2; exit 2 ;;
+  esac
+fi
+tracker_app="${TRACKER_BUILD_DIR:-$tracker_checkout/build}/Daylanes.app"
+tracker_contents="$tracker_app/Contents"
+mkdir -p "$tracker_contents/MacOS" "$tracker_contents/Resources"
+rm -rf "$tracker_contents/Resources/tracker"
+cp desktop/Info.plist "$tracker_contents/Info.plist"
+set --
+if [ "$tracker_payments" = 1 ]; then
+  set -- "$@" -D TRACKER_PAYMENTS
+  # Builds released more than 12 months after a purchase ask for a renewal.
+  /usr/libexec/PlistBuddy -c "Set :TrackerReleaseDate ${TRACKER_RELEASE_DATE:-$(date -u +%Y-%m-%d)}" \
+    "$tracker_contents/Info.plist"
+else
+  for tracker_key in TrackerPolarAPI TrackerPolarOrganizationID TrackerCheckoutServer TrackerCheckoutLink TrackerReleaseDate; do
+    /usr/libexec/PlistBuddy -c "Delete :$tracker_key" "$tracker_contents/Info.plist"
+  done
+fi
+tracker_calendar_resource="$tracker_contents/Resources/GoogleCalendarDesktopClient.json"
+rm -f "$tracker_calendar_resource"
+if [ "$tracker_calendar" = 1 ]; then
+  set -- "$@" -D TRACKER_GOOGLE_CALENDAR
+  if [ -n "${TRACKER_GOOGLE_CALENDAR_CLIENT_FILE:-}" ]; then
+    /usr/bin/install -m 0644 "$TRACKER_GOOGLE_CALENDAR_CLIENT_FILE" "$tracker_calendar_resource"
+  fi
+fi
+for tracker_source in desktop/*.swift; do
+  case "$tracker_source" in
+    desktop/Licensing.swift|desktop/AccountSettings.swift) [ "$tracker_payments" = 1 ] || continue ;;
+    desktop/GoogleCalendar*.swift) [ "$tracker_calendar" = 1 ] || continue ;;
+  esac
+  set -- "$@" "$tracker_source"
+done
+mkdir -p "$tracker_contents/Resources/Licenses"
+cp LICENSE "$tracker_contents/Resources/Licenses/Tracker.txt"
+cp vendor/zstd/LICENSE "$tracker_contents/Resources/Licenses/zstd.txt"
+# Tracker copies this to ~/Library/Application Support/Tracker/Chrome Extension on launch.
+rm -rf "$tracker_contents/Resources/chrome-extension"
+cp -R chrome-integration/extension "$tracker_contents/Resources/chrome-extension"
+# App icon. AppIcon.icns (classic look, macOS 14 and 15) comes from assets/icon/AppIcon-1024.png.
+# On macOS 26 and later the Dock prefers Assets.car, which actool compiles from the Icon
+# Composer package assets/icon/AppIcon.icon (Liquid Glass, light and dark). Xcode's actool
+# needs to know .icon packages (Xcode 26+); without it the classic icon is used everywhere.
+tracker_iconset=$(mktemp -d)/AppIcon.iconset
+mkdir -p "$tracker_iconset"
+for tracker_size in 16 32 128 256 512; do
+  sips -z "$tracker_size" "$tracker_size" assets/icon/AppIcon-1024.png \
+    --out "$tracker_iconset/icon_${tracker_size}x${tracker_size}.png" >/dev/null
+  tracker_double=$((tracker_size * 2))
+  sips -z "$tracker_double" "$tracker_double" assets/icon/AppIcon-1024.png \
+    --out "$tracker_iconset/icon_${tracker_size}x${tracker_size}@2x.png" >/dev/null
+done
+iconutil -c icns "$tracker_iconset" -o "$tracker_contents/Resources/AppIcon.icns"
+rm -rf "$(dirname "$tracker_iconset")"
+tracker_actool_out=$(mktemp -d)
+if xcrun actool assets/icon/AppIcon.icon --compile "$tracker_actool_out" --platform macosx \
+    --minimum-deployment-target 14.0 --app-icon AppIcon --include-all-app-icons \
+    --output-partial-info-plist "$tracker_actool_out/partial.plist" >/dev/null 2>&1 \
+  && [ -f "$tracker_actool_out/Assets.car" ]; then
+  cp "$tracker_actool_out/Assets.car" "$tracker_contents/Resources/Assets.car"
+else
+  rm -f "$tracker_contents/Resources/Assets.car"
+  echo "build-desktop: actool could not compile AppIcon.icon, using the classic icon only" >&2
+fi
+rm -rf "$tracker_actool_out"
+tracker_target="$tracker_arch-apple-macosx14.0"
+xcrun swiftc -target "$tracker_target" -O -parse-as-library "$@" core/*.swift \
+  chrome-integration/TrackerChromeWire.swift chrome-integration/TrackerChromeClient.swift \
+  -o "$tracker_contents/MacOS/Daylanes"
+# The Swift engine's command line (TrackerCore + cli/main.swift). Unported commands fall back to Python.
+xcrun swiftc -target "$tracker_target" -O core/*.swift cli/main.swift \
+  -o "$tracker_contents/MacOS/TrackerCLI"
+xcrun swiftc -target "$tracker_target" -O -parse-as-library \
+  chrome-integration/TrackerChromeWire.swift chrome-integration/TrackerChromeHost.swift chrome-integration/TrackerChromeHostMain.swift \
+  -o "$tracker_contents/MacOS/TrackerChromeHost"
+# Sign with a stable identity when one is installed, so macOS Keychain keeps trusting
+# Tracker across rebuilds instead of asking again after every build. Set
+# TRACKER_SIGN_IDENTITY to a certificate name or SHA-1, or to "-" for ad hoc signing.
+tracker_identity=${TRACKER_SIGN_IDENTITY:-}
+if [ -z "$tracker_identity" ]; then
+  tracker_identity=$(security find-identity -v -p codesigning 2>/dev/null \
+    | awk '/"Developer ID Application: .*\(J7C56736F3\)"/ { print $2; exit }')
+fi
+tracker_sign() {
+  if [ -n "$tracker_identity" ] && [ "$tracker_identity" != "-" ] \
+    && codesign --force --timestamp=none --sign "$tracker_identity" "$1" 2>/dev/null; then
+    return 0
+  fi
+  [ -n "$tracker_identity" ] && [ "$tracker_identity" != "-" ] \
+    && echo "build-desktop: signing with $tracker_identity failed, using ad hoc signing" >&2
+  tracker_identity=-
+  codesign --force --sign - "$1"
+}
+tracker_sign "$tracker_contents/MacOS/TrackerChromeHost"
+tracker_sign "$tracker_contents/MacOS/TrackerCLI"
+# Reads Codex's compressed .jsonl.zst logs (zstd's own decoder, vendored in vendor/zstd).
+xcrun clang -target "$tracker_target" -O2 -I vendor/zstd vendor/zstd/zstddeclib.c vendor/zstd/unzstd.c \
+  -o "$tracker_contents/MacOS/TrackerUnzstd"
+tracker_sign "$tracker_contents/MacOS/TrackerUnzstd"
+tracker_sign "$tracker_app"
+printf '%s\n' "$tracker_app"

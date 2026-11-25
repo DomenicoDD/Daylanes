@@ -1,0 +1,17 @@
+# Copy to wrangler.toml and enter the bindings for your own Worker.
+name = "daylanes-checkout"
+main = "main.mjs"
+compatibility_date = "2026-11-01"
+workers_dev = true
+preview_urls = false
+
+[[kv_namespaces]]
+binding = "TRIALS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+POLAR_API = "https://sandbox-api.polar.sh"
+PRODUCT_ID = "REPLACE_WITH_POLAR_PRODUCT_ID"
+TRIAL_DISCOUNT_ID = "REPLACE_WITH_POLAR_DISCOUNT_ID"
+SUCCESS_URL = ""
+# Set POLAR_TOKEN with wrangler secret put POLAR_TOKEN.

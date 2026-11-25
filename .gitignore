@@ -1,0 +1,12 @@
+__pycache__/
+*.sqlite3
+*.sqlite3-*
+.venv/
+
+build/
+.DS_Store
+.wrangler/
+.dev.vars
+.dev.vars.*
+client_secret_*.json
+/server/checkout/wrangler.toml

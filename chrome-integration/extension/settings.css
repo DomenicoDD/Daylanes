@@ -1,0 +1,25 @@
+:root {
+  color-scheme: light dark;
+  font: 14px system-ui, sans-serif;
+}
+
+body { margin: 0; width: 22rem; }
+main { padding: 1rem; }
+h1 { font-size: 1.15rem; margin: 0; }
+p { line-height: 1.4; margin: .55rem 0 .85rem; }
+label { display: block; font-weight: 600; }
+label span { font-weight: 400; }
+input { box-sizing: border-box; width: 100%; font: inherit; padding: .4rem; margin-top: .35rem; }
+.buttons { display: flex; justify-content: end; gap: .55rem; }
+button { font: inherit; padding: .35rem .6rem; }
+#error:empty, #hint:empty { display: none; }
+#hint { font-size: .9rem; opacity: .85; }
+.status { font-weight: 600; padding-left: 1.1rem; position: relative; }
+.status::before {
+  content: ""; position: absolute; left: 0; top: .4em;
+  width: .6rem; height: .6rem; border-radius: 50%; background: #999;
+}
+.status[data-state="tracking"]::before { background: #2e9d4f; }
+.status[data-state="waiting"]::before { background: #d39a12; }
+.status[data-state="error"]::before { background: #d4443b; }
+.fine { font-size: .8rem; opacity: .7; margin-bottom: 0; }
