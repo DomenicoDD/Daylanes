@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The project diary as one reading column: a header, then the recent workdays newest first, each on a timeline
-/// with its date on the left. Days without an entry fold into a quiet row.
+/// The project diary: the usual page header, then the recent workdays newest first on a timeline with the date on
+/// the left. Each entry sits in a faint outline. Days without an entry fold into a quiet row.
 struct DiaryPage: View {
     let snapshot: Snapshot
     @State private var span = DiaryPage.step
@@ -37,17 +37,18 @@ struct DiaryPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                header
+            VStack(alignment: .leading, spacing: 22) {
+                PageHeader(title: "Diary", subtitle: status) { actions }
                 content
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 40)
-            .frame(maxWidth: 860, alignment: .leading)
+            // Same column and padding as Overview and Projects, so the header doesn't move when switching pages.
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+            .frame(maxWidth: 1120)
             .frame(maxWidth: .infinity)
         }
-        .scrollIndicators(.hidden)
+        .scrollContentBackground(.hidden)
+        .scrollIndicators(.never)
         .accessibilityIdentifier("diary-page")
         .task(id: snapshot.database) { reload() }
         .onReceive(DistributedNotificationCenter.default().publisher(for: DiaryStore.changed)) { _ in reload() }
@@ -70,55 +71,19 @@ struct DiaryPage: View {
 
     // MARK: Header
 
-    private var eyebrow: String {
-        (project ?? client ?? "All projects") + " · daily log"
-    }
-
     private var status: String {
-        var parts: [String] = []
+        var parts = [project ?? client ?? "All projects"]
         if let latest = shown.first {
-            parts.append("Latest entry " + dateFor(latest.day).formatted(dateFormat(.dateTime.weekday(.wide).day().month(.wide))))
+            parts.append("latest entry " + dateFor(latest.day).formatted(dateFormat(.dateTime.weekday(.wide).day().month(.wide))))
         }
         if let clock {
-            parts.append("each workday ends at \(DiaryClock.label(clock.cutoff))")
+            parts.append("workday ends at \(DiaryClock.label(clock.cutoff))")
         }
         return parts.joined(separator: " · ")
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(eyebrow.uppercased())
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(1.1)
-                .foregroundStyle(Theme.accent)
-                .lineLimit(1)
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 16) {
-                    title
-                    Spacer(minLength: 12)
-                    actions
-                }
-                VStack(alignment: .leading, spacing: 12) {
-                    title
-                    actions
-                }
-            }
-            if !status.isEmpty {
-                Text(status).font(.callout).foregroundStyle(Theme.secondary)
-            }
-        }
-    }
-
-    private var title: some View {
-        Text("What shipped, day by day")
-            .font(.system(size: 30, weight: .semibold, design: .serif))
-            .foregroundStyle(Theme.text)
-            .accessibilityAddTraits(.isHeader)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
     private var actions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Menu {
                 Picker("Client", selection: $client) {
                     Text("All clients").tag(nil as String?)
@@ -172,16 +137,18 @@ struct DiaryPage: View {
             if let oldest, let range, oldest < range.first.iso {
                 Button("Show earlier days") { span += Self.step }
                     .buttonStyle(PillButtonStyle())
-                    .padding(.leading, 112)
+                    .padding(.leading, 106)
             }
         }
     }
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: "book.pages").font(.system(size: 26)).foregroundStyle(Theme.accent)
-            Text("Your diary starts here").font(.system(size: 22, weight: .semibold, design: .serif))
+            Label("Your diary starts here", systemImage: "book.pages")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(Theme.text)
             Text("Pick a project and copy its prompt into Codex, Claude Code or any agent. It writes a short entry for each workday from your commits, pull requests and notes, and it shows up here.")
+                .font(.callout)
                 .foregroundStyle(Theme.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button(project.map { "Set up the \($0) diary" } ?? "Set up a project diary") {
@@ -191,19 +158,20 @@ struct DiaryPage: View {
             .disabled(snapshot.projects.isEmpty)
             .padding(.top, 4)
         }
-        .padding(22)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .blockSurface()
     }
 
     private func timelineRow(_ row: DiaryTimeline.Row, last: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            when(row).frame(width: 84, alignment: .leading)
+            when(row).frame(width: 78, alignment: .leading)
             rail(row, last: last).frame(width: 28)
             Group {
                 switch row {
                 case let .day(_, entries):
-                    VStack(alignment: .leading, spacing: 26) {
+                    VStack(alignment: .leading, spacing: 10) {
                         ForEach(entries) { entryView($0) }
                     }
                 case let .quiet(from, to):
@@ -214,7 +182,7 @@ struct DiaryPage: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, quiet(row) ? 28 : 36)
+            .padding(.bottom, quiet(row) ? 20 : 22)
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -234,49 +202,44 @@ struct DiaryPage: View {
         switch row {
         case let .day(day, entries):
             VStack(alignment: .leading, spacing: 3) {
-                Text(dateFor(day), format: dateFormat(.dateTime.day().month(.abbreviated)))
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                Text(dateFor(day).formatted(dateFormat(.dateTime.day().month(.abbreviated))))
+                    .font(.system(size: 15, weight: .semibold))
+                    .monospacedDigit()
                     .foregroundStyle(Theme.text)
-                Text(dateFor(day), format: dateFormat(.dateTime.weekday(.wide)))
+                Text(dateFor(day).formatted(dateFormat(.dateTime.weekday(.wide))))
                     .font(.caption)
                     .foregroundStyle(Theme.secondary)
                 if day == currentDay {
-                    tag("today", tint: .purple)
+                    Chip(text: "Today", tint: .purple).padding(.top, 3)
                 } else if entries.contains(where: \.early) {
-                    tag("early", tint: .amber)
+                    Chip(text: "Early", tint: .amber).padding(.top, 3)
                         .help("This workday has not yet been refreshed through its cutoff.")
                 }
             }
-            .padding(.top, 2)
+            // Level with the headline inside the entry block.
+            .padding(.top, 12)
             .accessibilityElement(children: .combine)
         case let .quiet(from, to):
             VStack(alignment: .leading, spacing: 3) {
                 Text(quietRange(from: from, to: to))
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.callout)
+                    .monospacedDigit()
                     .foregroundStyle(Theme.secondary)
-                if to == currentDay { tag("today", tint: .purple) }
+                if to == currentDay { Chip(text: "Today", tint: .purple).padding(.top, 3) }
             }
-            .padding(.top, 2)
+            .padding(.top, 1)
         }
     }
 
     private func quietRange(from: String, to: String) -> String {
         let style = dateFormat(.dateTime.day().month(.abbreviated))
         if from == to { return dateFor(from).formatted(style) }
-        // ISO days: the same "YYYY-MM" prefix means the same month, so the start can drop it.
-        let start = from.prefix(7) == to.prefix(7) ? dateFor(from).formatted(dateFormat(.dateTime.day()))
-            : dateFor(from).formatted(from.prefix(4) == to.prefix(4) ? style : dateFormat(.dateTime.day().month(.abbreviated).year()))
-        return start + "–" + dateFor(to).formatted(from.prefix(4) == to.prefix(4) ? style : dateFormat(.dateTime.day().month(.abbreviated).year()))
-    }
-
-    private func tag(_ text: String, tint: Theme.Tint) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-            .foregroundStyle(tint.ink)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(tint.fill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-            .padding(.top, 2)
+        // Month first, so within one month the end drops it: "Nov 12–23". ISO days share a "YYYY-MM" prefix then.
+        if from.prefix(7) == to.prefix(7) {
+            return dateFor(from).formatted(style) + "–" + dateFor(to).formatted(dateFormat(.dateTime.day()))
+        }
+        let full = from.prefix(4) == to.prefix(4) ? style : dateFormat(.dateTime.day().month(.abbreviated).year())
+        return dateFor(from).formatted(full) + " – " + dateFor(to).formatted(full)
     }
 
     private func rail(_ row: DiaryTimeline.Row, last: Bool) -> some View {
@@ -284,7 +247,8 @@ struct DiaryPage: View {
             Circle()
                 .fill(quiet(row) ? Theme.secondary.opacity(0.45) : Theme.accent)
                 .frame(width: quiet(row) ? 7 : 9, height: quiet(row) ? 7 : 9)
-                .padding(.top, quiet(row) ? 6 : 5)
+                // A day's dot sits level with its date, which lines up with the entry block's headline.
+                .padding(.top, quiet(row) ? 6 : 17)
             Rectangle()
                 .fill(last ? Color.clear : Theme.secondary.opacity(0.25))
                 .frame(width: 1)
@@ -297,13 +261,13 @@ struct DiaryPage: View {
     // MARK: Entry
 
     private func entryView(_ entry: DiaryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             if project == nil {
-                Chip(text: entry.project, tint: .forProject(entry.project))
+                Chip(text: entry.project, dot: ProjectColor.color(for: entry.project))
             }
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(entry.headline)
-                    .font(.system(size: 22, weight: .semibold, design: .serif))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
@@ -311,15 +275,14 @@ struct DiaryPage: View {
                 Spacer(minLength: 0)
                 Button("Edit…", systemImage: "pencil") { editing = entry }
                     .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .foregroundStyle(Theme.secondary)
+                    .foregroundStyle(Theme.Tint.neutral.ink)
                     .accessibilityLabel("Edit \(entry.project) diary")
             }
             if !entry.summary.isEmpty {
                 Text(entry.summary)
                     .font(.system(size: 14))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.text.opacity(0.85))
+                    .lineSpacing(2)
+                    .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
@@ -334,6 +297,11 @@ struct DiaryPage: View {
                 }
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // No grey fill: the entry is outlined with the faint hairline so long diaries stay light.
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline))
     }
 
     private func standup(_ entry: DiaryEntry) -> some View {
@@ -342,9 +310,9 @@ struct DiaryPage: View {
         let isCopied = copied == entry.day + "/" + entry.project
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Read aloud · about \(seconds) sec", systemImage: "mic")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Theme.accent)
+                Label("Standup · about \(seconds) sec read aloud", systemImage: "mic")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.secondary)
                 Spacer()
                 Button(isCopied ? "Copied" : "Copy", systemImage: isCopied ? "checkmark" : "document.on.document") {
                     NSPasteboard.general.clearContents()
@@ -356,30 +324,30 @@ struct DiaryPage: View {
                 .accessibilityIdentifier("diary-copy-standup")
             }
             Text(text)
-                .font(.system(size: 15))
-                .lineSpacing(4)
+                .font(.system(size: 14))
+                .lineSpacing(2)
                 .foregroundStyle(Theme.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
                 .accessibilityIdentifier("diary-standup")
         }
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Theme.block.opacity(0.55), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder
     private func detail(_ section: DiarySection) -> some View {
         switch section.title {
         case "Waiting on":
-            callout(section, icon: "hourglass", tint: Theme.Tint.amber.ink)
+            callout(section, icon: "hourglass", tint: .amber)
         case "Suggested next":
-            callout(section, icon: "arrow.turn.down.right", tint: Theme.accent)
+            callout(section, icon: "arrow.turn.down.right", tint: .blue)
         default:
-            VStack(alignment: .leading, spacing: 4) {
-                Text(section.title.uppercased())
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .tracking(0.6)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(section.title)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.secondary)
                     .accessibilityAddTraits(.isHeader)
                 if !section.text.isEmpty {
@@ -395,11 +363,11 @@ struct DiaryPage: View {
         }
     }
 
-    private func callout(_ section: DiarySection, icon: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+    private func callout(_ section: DiarySection, icon: String, tint: Theme.Tint) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Label(section.title, systemImage: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(tint)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint.ink)
                 .accessibilityAddTraits(.isHeader)
             if !section.text.isEmpty {
                 Text(section.text)
@@ -411,17 +379,10 @@ struct DiaryPage: View {
             }
             sourceRow(section.sources ?? [])
         }
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .padding(.leading, 15)
-        .padding(.trailing, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack(alignment: .leading) {
-                tint.opacity(0.07)
-                tint.frame(width: 3)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .background(tint.fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder
@@ -442,10 +403,10 @@ struct DiaryPage: View {
                 Text(source.title.count > 48 ? String(source.title.prefix(47)) + "…" : source.title).lineLimit(1)
             }
             .font(.caption.weight(.medium))
-            .foregroundStyle(Theme.text.opacity(0.8))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Theme.block, in: Capsule())
+            .foregroundStyle(Theme.Tint.neutral.ink)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Theme.block, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(source.title + "\n" + source.url.absoluteString)
@@ -462,6 +423,8 @@ struct DiaryPage: View {
         var result = style
         result.timeZone = zone
         result.calendar = TimeZones.calendar(zone)
+        // Month first ("Nov 25"), like the Overview and Projects period subtitles, whatever the Mac's region.
+        result.locale = Locale(identifier: "en_US")
         return result
     }
 
