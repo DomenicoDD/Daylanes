@@ -23,15 +23,19 @@ struct DiaryRoutineView: View {
     @State private var notice: String?
 
     private struct Settings: Equatable {
+        var agent: DiaryAgent
+        var brief: String
         var zone: String
         var cutoff: String
         var scheduled: Bool
         var runAt: String
     }
 
-    private var settings: Settings { Settings(zone: zone, cutoff: cutoff, scheduled: scheduled, runAt: runAt) }
-    private var dirty: Bool { baseline.map { settings != $0 } == true || routine?.brief != saved?.brief && saved != nil
-        || routine?.agent != saved?.agent && saved != nil || saved == nil && routine?.brief.isEmpty == false }
+    private var settings: Settings? {
+        routine.map { Settings(agent: $0.agent, brief: $0.brief, zone: zone, cutoff: cutoff, scheduled: scheduled, runAt: runAt) }
+    }
+
+    private var dirty: Bool { settings != baseline }
     private var cli: String? { Bundle.main.url(forAuxiliaryExecutable: "TrackerCLI")?.path }
 
     var body: some View {
@@ -81,16 +85,23 @@ struct DiaryRoutineView: View {
             Picker("Writing agent", selection: Binding(get: { value.agent }, set: { routine?.agent = $0 })) {
                 ForEach(DiaryAgent.allCases) { Text($0.title).tag($0) }
             }
-            Text("Your prompt for this project").font(.callout.weight(.medium))
+            HStack {
+                Text("Project brief").font(.callout.weight(.medium))
+                Spacer()
+                if value.brief != DiaryRoutine.briefTemplate {
+                    Button("Use template") { routine?.brief = DiaryRoutine.briefTemplate }
+                        .buttonStyle(.link)
+                }
+            }
+            Text("Save the template as-is or add details such as specific repos, Slack channels, and sections. The agent reads the saved brief on every run.")
+                .font(.callout).foregroundStyle(.secondary)
             TextEditor(text: Binding(get: { value.brief }, set: { routine?.brief = $0 }))
                 .font(.body)
                 .padding(5)
-                .frame(minHeight: 100)
+                .frame(minHeight: 132)
                 .scrollContentBackground(.hidden)
                 .background(Theme.block.opacity(0.65), in: RoundedRectangle(cornerRadius: 7))
-                .accessibilityLabel("Project diary prompt")
-            Text("Write what to look at and how to report it. You can name project chats, your GitHub contributions, Slack channels, calendar events or meeting notes from Granola. Your agent fetches this prompt on every run.")
-                .font(.callout).foregroundStyle(.secondary)
+                .accessibilityLabel("Project diary brief")
             Picker("Run this project", selection: $scheduled) {
                 Text("First morning availability").tag(false)
                 Text("At a set time").tag(true)
@@ -140,7 +151,9 @@ struct DiaryRoutineView: View {
                 Text("In \(saved.agent.title)").font(.headline).accessibilityAddTraits(.isHeader)
                 Text("Run the registration command in Terminal, then open a dedicated local conversation in your project folder. Connect and authorize the sources named in your prompt. Paste the standing instruction into that conversation once.")
                     .foregroundStyle(.secondary)
-                DisclosureGroup("Register Daylanes and copy the standing instruction") {
+                Text("This project’s MCP connection exposes two tools. get_diary_work reads the brief and due draft. submit_diary_entry saves the result.")
+                    .font(.callout).foregroundStyle(.secondary)
+                DisclosureGroup("MCP registration and standing instruction") {
                     VStack(alignment: .leading, spacing: 10) {
                         SetupCodeBlock(title: "Registration command", values: [command.registration(using: prefix)])
                         SetupCodeBlock(title: "Standing instruction", values: [DiarySchedule.instruction(saved.id)])

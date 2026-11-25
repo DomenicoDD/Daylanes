@@ -58,9 +58,18 @@ enum DiaryAgent: String, CaseIterable, Identifiable, Codable, Sendable {
 }
 
 struct DiaryRoutine: Codable, Equatable, Sendable {
+    static let briefTemplate = """
+    Review the project sources you can access for this workday: relevant project chats, my GitHub contributions, \
+    project Slack channels, calendar events, and meeting notes from Granola or another connected tool.
+
+    Lead with confirmed outcomes and decisions. Include blockers and suggested next steps when relevant. \
+    Write a 30–45 second first-person standup I can read aloud. Link to the evidence and flag any important \
+    gaps in what you could verify.
+    """
+
     var id = UUID()
     var agent: DiaryAgent = .codex
-    var brief = ""
+    var brief = DiaryRoutine.briefTemplate
     /// nil makes the completed day due at the cutoff.
     var runMinute: Int?
     var firstDay: String

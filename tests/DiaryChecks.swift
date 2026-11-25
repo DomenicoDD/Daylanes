@@ -41,7 +41,7 @@ struct DiaryChecks {
             try Store.createProject(db, name: project, client: client, kind: "billable", folder: nil)
         }
         var routine = DiaryRoutine(brief: "Lead with decisions.", runMinute: 180, firstDay: tuesday.iso)
-        let peerRoutine = DiaryRoutine(brief: "Summarize the rehearsal.", firstDay: tuesday.iso)
+        let peerRoutine = DiaryRoutine(firstDay: tuesday.iso)
         let otherRoutine = DiaryRoutine(brief: "Review the illustrations.", firstDay: tuesday.iso)
         try DiaryStore.saveRoutine(db, project: project, routine)
         try DiaryStore.saveRoutine(db, project: peer, peerRoutine)
@@ -93,6 +93,14 @@ struct DiaryChecks {
         try check(!session(nil).tools.contains { $0.toolset == "diary" }, "ordinary setup access cannot read prompts or write drafts")
         try check(try call("set_up_project", using: &writer)["error"]["code"].intValue == -32602, "diary cannot mutate the ledger")
         let requested: JSON = .object([("work_date", .string(tuesday.iso))])
+        var defaultWriter = session(peerRoutine)
+        let defaultBrief = try call("get_diary_work", requested, using: &defaultWriter)["result"]["structuredContent"]["data"]["brief"].stringValue
+        try check(defaultBrief == DiaryRoutine.briefTemplate && defaultBrief?.contains("first-person standup") == true,
+                  "a newly saved diary starts with a usable brief")
+        let instruction = DiarySchedule.instruction(peerRoutine.id)
+        try check(instruction.contains(DiarySchedule.serverName(peerRoutine.id)) && instruction.contains("get_diary_work({})")
+                  && instruction.contains("submit_diary_entry") && instruction.contains("work_date, window, through, and revision")
+                  && instruction.contains("data.brief"), "the standing instruction points to the scoped tools and the live brief")
         let badProject: JSON = .object([("project", .string(other))])
         try check(try call("get_diary_work", badProject, using: &writer)["result"]["isError"].boolValue == true,
                   "the writer cannot supply another project")
