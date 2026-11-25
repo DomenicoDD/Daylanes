@@ -76,13 +76,19 @@ enum DiaryGuide {
 
             ## The entry
 
-            - `headline` (required): one outcome, in a short sentence.
+            - `headline` (required): one outcome, in a short sentence of plain text.
             - `summary` (required): what happened and why it mattered, in one or two sentences.
-            - `standup`: a spoken first-person update, if the brief asks for one.
-            - `outcomes`, `decisions`, `blockers`, `next_steps`: plain text, with line breaks for lists.
+            - `standup`: a spoken first-person update, if the brief asks for one. Plain text, no Markdown: it is \
+            read aloud.
+            - `outcomes`, `decisions`, `blockers`, `next_steps`: Markdown.
             - `sections`: extra headings the brief asks for, as `[{"title": "…", "text": "…", "sources": […]}]`. \
             Reuse the same titles when you refresh.
             - `sources`: links that back up the entry, as `[{"title": "…", "url": "https://…"}]`.
+
+            Write `summary`, the four lists and section text in light Markdown so they scan easily: a `- ` bullet \
+            per item, **bold** for the key name or outcome, `code` for identifiers such as branches and tickets, \
+            and [links](https://…) inline. Keep paragraphs short and separate them with a blank line. Don't use \
+            headings, tables or images.
 
             If you find no activity for the day, save a short quiet-day entry so the next day can follow. If a \
             source you need is unavailable or saving fails, stop and say what needs attention. Don't retry with \

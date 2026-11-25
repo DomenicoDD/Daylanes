@@ -17,6 +17,9 @@ struct DiaryPage: View {
     @State private var error: String?
 
     private static let step = 14
+    static let scrollSpace = "diary-scroll"
+    /// Entries are capped at a 65-character reading measure plus their padding.
+    private let entryWidth = DiaryMarkdown.measure() + 32
 
     private var filteredProjects: [Project] {
         snapshot.projects.filter { client == nil || $0.client == client }
@@ -36,19 +39,30 @@ struct DiaryPage: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                PageHeader(title: "Diary", subtitle: status) { actions }
-                content
+        VStack(spacing: 0) {
+            // The header stays put while the days scroll under it. Same column and padding as Overview and
+            // Projects, so it doesn't move when switching pages.
+            PageHeader(title: "Diary", subtitle: status) { actions }
+                .padding(.horizontal, 28)
+                .padding(.top, 24)
+                .padding(.bottom, 16)
+                .frame(maxWidth: 1120)
+                .frame(maxWidth: .infinity)
+                .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    content
+                }
+                .padding(.horizontal, 28)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
+                .frame(maxWidth: 1120)
+                .frame(maxWidth: .infinity)
             }
-            // Same column and padding as Overview and Projects, so the header doesn't move when switching pages.
-            .padding(.horizontal, 28)
-            .padding(.vertical, 24)
-            .frame(maxWidth: 1120)
-            .frame(maxWidth: .infinity)
+            .coordinateSpace(name: DiaryPage.scrollSpace)
+            .scrollContentBackground(.hidden)
+            .scrollIndicators(.never)
         }
-        .scrollContentBackground(.hidden)
-        .scrollIndicators(.never)
         .accessibilityIdentifier("diary-page")
         .task(id: snapshot.database) { reload() }
         .onReceive(DistributedNotificationCenter.default().publisher(for: DiaryStore.changed)) { _ in reload() }
@@ -166,7 +180,13 @@ struct DiaryPage: View {
 
     private func timelineRow(_ row: DiaryTimeline.Row, last: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            when(row).frame(width: 78, alignment: .leading)
+            // The hidden copy makes the row at least as tall as its date; the visible one sticks to the top of
+            // the scroll view while its day scrolls past.
+            when(row).frame(width: 78, alignment: .leading).hidden()
+                .frame(maxHeight: .infinity, alignment: .top)
+                .overlay(alignment: .topLeading) {
+                    StickyInRow(space: DiaryPage.scrollSpace) { when(row).frame(width: 78, alignment: .leading) }
+                }
             rail(row, last: last).frame(width: 28)
             Group {
                 switch row {
@@ -182,9 +202,9 @@ struct DiaryPage: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, quiet(row) ? 20 : 22)
         }
         .fixedSize(horizontal: false, vertical: true)
+        .padding(.bottom, quiet(row) ? 20 : 22)
     }
 
     private func quiet(_ row: DiaryTimeline.Row) -> Bool {
@@ -261,7 +281,7 @@ struct DiaryPage: View {
     // MARK: Entry
 
     private func entryView(_ entry: DiaryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             if project == nil {
                 Chip(text: entry.project, dot: ProjectColor.color(for: entry.project))
             }
@@ -279,12 +299,7 @@ struct DiaryPage: View {
                     .accessibilityLabel("Edit \(entry.project) diary")
             }
             if !entry.summary.isEmpty {
-                Text(entry.summary)
-                    .font(.system(size: 14))
-                    .lineSpacing(2)
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+                DiaryMarkdown(text: entry.summary)
             }
             if !entry.standup.pythonStripped.isEmpty { standup(entry) }
             ForEach(Array(entry.details.enumerated()), id: \.offset) { _, section in
@@ -302,6 +317,7 @@ struct DiaryPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // No grey fill: the entry is outlined with the faint hairline so long diaries stay light.
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline))
+        .frame(maxWidth: entryWidth, alignment: .leading)
     }
 
     private func standup(_ entry: DiaryEntry) -> some View {
@@ -325,7 +341,7 @@ struct DiaryPage: View {
             }
             Text(text)
                 .font(.system(size: 14))
-                .lineSpacing(2)
+                .lineSpacing(4)
                 .foregroundStyle(Theme.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
@@ -351,11 +367,7 @@ struct DiaryPage: View {
                     .foregroundStyle(Theme.secondary)
                     .accessibilityAddTraits(.isHeader)
                 if !section.text.isEmpty {
-                    Text(section.text)
-                        .font(.system(size: 14))
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
+                    DiaryMarkdown(text: section.text)
                 }
                 sourceRow(section.sources ?? [])
             }
@@ -370,12 +382,7 @@ struct DiaryPage: View {
                 .foregroundStyle(tint.ink)
                 .accessibilityAddTraits(.isHeader)
             if !section.text.isEmpty {
-                Text(section.text)
-                    .font(.system(size: 14))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+                DiaryMarkdown(text: section.text)
             }
             sourceRow(section.sources ?? [])
         }
@@ -529,6 +536,30 @@ private struct DiaryEntryEditor: View {
             dismiss()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Keeps its content at the top of the visible scroll area while the row it sits in scrolls past, then lets
+/// it leave with the row's bottom edge, like a sticky date column.
+private struct StickyInRow<Content: View>: View {
+    let space: String
+    @ViewBuilder var content: Content
+    @State private var height: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { proxy in
+            let frame = proxy.frame(in: .named(space))
+            let shift = min(max(0, -frame.minY), max(0, frame.height - height))
+            content
+                .background {
+                    GeometryReader { inner in
+                        Color.clear
+                            .onAppear { height = inner.size.height }
+                            .onChange(of: inner.size.height) { _, value in height = value }
+                    }
+                }
+                .offset(y: shift)
         }
     }
 }
