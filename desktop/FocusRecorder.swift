@@ -283,7 +283,7 @@ final class FocusRecorder: NSObject, ObservableObject {
     }
 
     @objc private func sample() {
-        guard enabled else { return }
+        guard enabled, !Self.isDemo else { return }
         guard suspended.isEmpty else {
             updateStatus(.away)
             return

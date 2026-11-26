@@ -16,6 +16,12 @@ app="$demo/Daylanes.app"
 bundle_id=com.domenicodidonna.tracker.demo
 home="$demo/home"
 db="$home/.local/share/tracker/ledger.sqlite3"
+# A clean environment: only the demo home, so variables such as CODEX_HOME or XDG_DATA_HOME can't point
+# the demo at real agent history.
+demo_env() {
+  env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin USER="${USER:-}" LOGNAME="${LOGNAME:-}" LANG="${LANG:-en_US.UTF-8}" \
+    TMPDIR="${TMPDIR:-/tmp}" HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" DAYLANES_DEMO=1 "$@"
+}
 rebuild=0 keep=0
 for arg in "$@"; do
   case "$arg" in
@@ -39,8 +45,7 @@ pkill -f "$app/Contents/MacOS/Daylanes" 2>/dev/null && sleep 1 || true
 if [ "$keep" = 0 ] || [ ! -f "$db" ]; then
   rm -rf "$home"
   mkdir -p "$home/Library/Preferences" "$(dirname "$db")"
-  HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" \
-    /usr/bin/python3 "$checkout/tools/demo/seed.py" --db "$db" --cli "$app/Contents/MacOS/TrackerCLI" --home "$home"
+  demo_env /usr/bin/python3 "$checkout/tools/demo/seed.py" --db "$db" --cli "$app/Contents/MacOS/TrackerCLI" --home "$home"
   # macOS keeps the demo's settings in ~/Library/Preferences under its own bundle ID. Keep the window size,
   # reset the rest that matters.
   defaults delete "$bundle_id" snoozedUntil >/dev/null 2>&1 || true
@@ -48,8 +53,7 @@ if [ "$keep" = 0 ] || [ ! -f "$db" ]; then
   defaults write "$bundle_id" activitySpan -string Day
 fi
 
-DAYLANES_DEMO=1 HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" \
-  nohup "$app/Contents/MacOS/Daylanes" >"$demo/demo.log" 2>&1 &
+demo_env nohup "$app/Contents/MacOS/Daylanes" >"$demo/demo.log" 2>&1 &
 sleep 2
 osascript -e "tell application id \"$bundle_id\" to activate" >/dev/null 2>&1 || true
 echo "demo: Daylanes with sample data is open (data in $home)"
