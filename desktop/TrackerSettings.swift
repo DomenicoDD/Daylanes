@@ -992,6 +992,8 @@ private struct SettingsWindowChrome: NSViewRepresentable {
         window.titleVisibility = .hidden
         window.styleMask.insert(.fullSizeContentView)
         window.isMovableByWindowBackground = true
+        // The title bar strip shows the window's background, so give it the header's colour.
+        window.backgroundColor = NSColor(hex: 0x111113)
     }
 }
 
