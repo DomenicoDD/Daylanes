@@ -2,9 +2,10 @@
   "mcpServers": {
     "daylanes": {
       "type": "stdio",
-      "command": "${PLUGIN_ROOT}/scripts/daylanes",
-      "args": ["mcp"],
-      "cwd": "${PLUGIN_ROOT}"
+      "command": "/Applications/Daylanes.app/Contents/MacOS/TrackerCLI",
+      "args": [
+        "mcp"
+      ]
     }
   }
 }

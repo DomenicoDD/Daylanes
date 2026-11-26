@@ -14,7 +14,15 @@
       "source": "./plugins/daylanes",
       "description": "Hours, agent usage, costs and the project Diary from the Daylanes Mac app. Requires Daylanes on macOS.",
       "category": "productivity",
-      "homepage": "https://daylanes.app"
+      "homepage": "https://daylanes.app",
+      "mcpServers": {
+        "daylanes": {
+          "command": "/Applications/Daylanes.app/Contents/MacOS/TrackerCLI",
+          "args": [
+            "mcp"
+          ]
+        }
+      }
     }
   ]
 }

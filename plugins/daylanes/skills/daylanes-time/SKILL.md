@@ -9,7 +9,7 @@ Daylanes keeps a local ledger on the user's Mac: human time (from the app in fro
 
 ## Prefer the MCP tools
 
-If the `daylanes` MCP server from this plugin is connected, use its tools: start with `get_status`, use `resolve_context` to find the project for the current folder, then `usage_report`, `get_day`, `get_week`, `list_entries`, `list_unassigned`, `review_unassigned`, `billing_summary` and `get_report` as needed. They are read-only unless the user turned on project and rule setup in Daylanes.
+If a `daylanes` MCP server is connected (installed from the Daylanes marketplace, or registered by hand with `TrackerCLI mcp`), use its tools: start with `get_status`, use `resolve_context` to find the project for the current folder, then `usage_report`, `get_day`, `get_week`, `list_entries`, `list_unassigned`, `review_unassigned`, `billing_summary` and `get_report` as needed. They are read-only unless the user turned on project and rule setup in Daylanes.
 
 ## Otherwise use the command-line tool
 
