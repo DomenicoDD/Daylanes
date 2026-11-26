@@ -162,7 +162,7 @@ final class FocusRecorder: NSObject, ObservableObject {
 
     private func beginSampling() {
         enabled = true
-        if Self.isDemo { return }
+        if Self.isDemo { status = .waiting; return }
         processActivity = ProcessInfo.processInfo.beginActivity(
             options: .userInitiatedAllowingIdleSystemSleep, reason: "Recording foreground app time"
         )
