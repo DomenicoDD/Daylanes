@@ -23,6 +23,31 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .privacy: "lock.shield"
         }
     }
+
+    /// The short line under the section's card and in the header.
+    var detail: String {
+        switch self {
+        case .general: "Tracking and startup"
+        #if TRACKER_PAYMENTS
+        case .account: "Licence and purchase"
+        #endif
+        case .integrations: "Services and agents"
+        case .ai: "Rates and AI costs"
+        case .privacy: "Your data"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .general: "How Daylanes tracks your time, and the permissions it needs."
+        #if TRACKER_PAYMENTS
+        case .account: "Your licence, trial and purchase."
+        #endif
+        case .integrations: "Connect the services and agents Daylanes reads from. Keys stay in macOS Keychain."
+        case .ai: "What you bill clients, and what your AI tools cost."
+        case .privacy: "Where your ledger lives and what leaves this Mac."
+        }
+    }
 }
 
 private enum SettingsSheet: Identifiable {
@@ -58,15 +83,31 @@ struct SettingsWindow: View {
     @State private var sheet: SettingsSheet?
 
     var body: some View {
-        TabView(selection: $tab) {
-            ForEach(SettingsSection.allCases) { section in
-                page(section)
-                    .tabItem { Label(section.rawValue, systemImage: section.icon) }
-                    .tag(section)
-            }
+        VStack(spacing: 0) {
+            SheetHeader(title: "Settings", subtitle: tab.summary, topInset: 18)
+            SheetModePicker(selection: $tab, options: SettingsSection.allCases.map {
+                SheetModeOption(value: $0, title: $0.rawValue, detail: $0.detail, icon: $0.icon)
+            })
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+            .padding(.bottom, 4)
+            page(tab)
+                .id(tab)
         }
-        .frame(width: 660, height: 560)
+        .background(SheetTheme.body)
+        .foregroundStyle(Theme.text)
+        .tint(SheetTheme.accent)
+        .ignoresSafeArea(.container, edges: .top)
+        .background(SettingsWindowChrome())
+        .navigationTitle("Settings")
+        .frame(width: 680, height: 640)
         .sheet(item: $sheet) { editor($0) }
+        .onReceive(AppRoute.shared.$showAgentSetup) { show in
+            guard show else { return }
+            DispatchQueue.main.async { AppRoute.shared.showAgentSetup = false }
+            tab = .integrations
+            sheet = .agentSetup
+        }
         .alert("Daylanes", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
         } message: {
@@ -88,7 +129,10 @@ struct SettingsWindow: View {
                                 manageToggl: { sheet = .togglKey },
                                 importToggl: { sheet = .togglImport },
                                 showAgentSetup: { sheet = .agentSetup })
-                    .padding(24)
+                    .buttonStyle(SheetButtonStyle(kind: .secondary))
+                    .padding(.horizontal, 24)
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .overlay(alignment: .bottom) {
@@ -269,8 +313,6 @@ struct TrackerSettings: View {
     /// One card per integration: what it is, whether it is connected and as whom, and the steps to connect.
     private var integrations: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Service keys stay in macOS Keychain. GitHub uses GitHub CLI’s own sign-in.")
-                .foregroundStyle(.secondary)
             agentCard
             togglCard
             gitHubCard
@@ -289,20 +331,20 @@ struct TrackerSettings: View {
     }
 
     private var agentCard: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "terminal").font(.title3).frame(width: 24).foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Agent access (MCP)").font(.headline)
-                Text("Read this ledger from Codex or Claude Code on this Mac.")
-                    .font(.callout).foregroundStyle(.secondary)
+        HStack(alignment: .center, spacing: 12) {
+            SettingsIcon(name: "terminal")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Agent access (MCP)").font(.system(size: 13, weight: .semibold))
+                Text("Let Codex, Claude Code or another agent on this Mac read your ledger.")
+                    .font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             Button("Connect an agent…", action: showAgentSetup)
+                .buttonStyle(SheetButtonStyle(kind: .primary))
         }
         .padding(14)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
+        .modifier(SettingsCard())
     }
 
     private var togglCard: some View {
@@ -344,7 +386,7 @@ struct TrackerSettings: View {
                     Link("Open profile", destination: URL(string: "https://track.toggl.com/profile")!)
                 }
                 IntegrationStep(number: 2, text: "Paste it here. Daylanes checks it with Toggl before saving it to Keychain.") {
-                    Button("Connect…", action: manageToggl).buttonStyle(.borderedProminent)
+                    Button("Connect…", action: manageToggl).buttonStyle(SheetButtonStyle(kind: .primary))
                 }
                 IntegrationStep(number: 3, text: "Pick the workspace to import from, if you have more than one.") { EmptyView() }
             }
@@ -384,7 +426,7 @@ struct TrackerSettings: View {
                         CommandButton(command: "chrome://extensions")
                     }
                     IntegrationStep(number: 3, text: "Drag the extension folder onto that page, or choose Load unpacked and select it. Remove any older Tracker for Chrome first.") {
-                        Button("Show folder") { revealChromeExtension() }.buttonStyle(.borderedProminent)
+                        Button("Show folder") { revealChromeExtension() }.buttonStyle(SheetButtonStyle(kind: .primary))
                     }
                     IntegrationStep(number: 4, text: "Switch to a Chrome tab for a few seconds while tracking is on, then check again.") {
                         Button("Check again") { chromeHelperRunning = TrackerChromeClient.helperRunning() }
@@ -451,7 +493,7 @@ struct TrackerSettings: View {
                     CommandButton(command: "gh auth login --web")
                 }
                 IntegrationStep(number: 3, text: "Come back and check the sign-in.") {
-                    Button("Check again") { Task { await model.checkGitHub() } }.buttonStyle(.borderedProminent)
+                    Button("Check again") { Task { await model.checkGitHub() } }.buttonStyle(SheetButtonStyle(kind: .primary))
                 }
                 if status == .unavailable {
                     Text("GitHub CLI did not respond. Check your connection and try again.").font(.callout).foregroundStyle(.secondary)
@@ -494,7 +536,7 @@ struct TrackerSettings: View {
                     Link("Open OpenRouter", destination: URL(string: "https://openrouter.ai/settings/management-keys")!)
                 }
                 IntegrationStep(number: 2, text: "Paste it here. Daylanes checks it by syncing your last 30 days before saving it to Keychain.") {
-                    Button("Connect…", action: manageOpenRouter).buttonStyle(.borderedProminent)
+                    Button("Connect…", action: manageOpenRouter).buttonStyle(SheetButtonStyle(kind: .primary))
                 }
             }
         }
@@ -522,7 +564,7 @@ struct TrackerSettings: View {
                     Text(provider.connectionInstructions).font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
-                    Button("Connect…") { manageProvider(provider) }.buttonStyle(.borderedProminent)
+                    Button("Connect…") { manageProvider(provider) }.buttonStyle(SheetButtonStyle(kind: .primary))
                 }
             }
         }
@@ -719,7 +761,7 @@ struct TrackerSettings: View {
     }
 
     private func heading(_ title: String) -> some View {
-        Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+        Text(title).font(.system(size: 13, weight: .semibold)).accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -811,23 +853,22 @@ struct IntegrationCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: icon).font(.title3).frame(width: 24).foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                SettingsIcon(name: icon)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                    Text(account ?? "Not connected").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text(account ?? "Not connected").font(.system(size: 12)).foregroundStyle(SheetTheme.muted).lineLimit(1)
                 }
                 Spacer()
                 badge
             }
-            Text(purpose).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(purpose).font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
             content
         }
         .padding(14)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
+        .modifier(SettingsCard())
     }
 
     /// Green when the connection is set up and its last check worked, orange when it needs attention.
@@ -838,16 +879,17 @@ struct IntegrationCard<Content: View>: View {
             : ("Active", "checkmark.circle.fill", .green)
         return Label(text, systemImage: icon)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(connected ? Color.white : tint)
+            .foregroundStyle(connected ? Color.white : SheetTheme.label)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(connected ? tint : Color.secondary.opacity(0.12), in: Capsule())
+            .background(connected ? tint : SheetTheme.soft, in: Capsule())
             .help(problem ?? (connected ? "Connected and working" : "Not connected yet"))
             .accessibilityLabel("\(title): \(text)")
     }
 }
 
-/// One numbered step of a connect sequence, with its action on the right.
+/// One numbered step of a connect sequence, with its action on the right. Numbers sit in the same small
+/// squares as the steps in the app's sheets.
 private struct IntegrationStep<Action: View>: View {
     let number: Int
     let text: String
@@ -855,15 +897,47 @@ private struct IntegrationStep<Action: View>: View {
     @ViewBuilder let action: Action
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: done ? "checkmark.circle.fill" : "\(number).circle")
-                .foregroundStyle(done ? Color.green : Color.secondary)
-                .accessibilityHidden(true)
-            Text(text).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
+        HStack(alignment: .center, spacing: 12) {
+            Group {
+                if done {
+                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.green)
+                } else {
+                    Text("\(number)").font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(SheetTheme.label)
+                }
+            }
+            .frame(width: 22, height: 22)
+            .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(SheetTheme.border))
+            .accessibilityHidden(true)
+            Text(text).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             action
         }
-        .font(.callout)
+    }
+}
+
+/// A section's icon in a small rounded square, like the icons on the sheets' mode cards.
+struct SettingsIcon: View {
+    let name: String
+
+    var body: some View {
+        Image(systemName: name)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(SheetTheme.label)
+            .frame(width: 32, height: 32)
+            .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(SheetTheme.border))
+            .accessibilityHidden(true)
+    }
+}
+
+/// The white card with a hairline border that holds one integration.
+struct SettingsCard: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(SheetTheme.body, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SheetTheme.border))
     }
 }
 
@@ -872,10 +946,16 @@ struct CommandButton: View {
     let command: String
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(command).font(.callout.monospaced()).textSelection(.enabled)
+        HStack(spacing: 8) {
+            Text(command).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                .lineLimit(1)
             CommandCopyButton(command: command)
         }
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .frame(height: 30)
+        .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(SheetTheme.border))
     }
 }
 
@@ -888,7 +968,44 @@ struct CommandCopyButton: View {
             NSPasteboard.general.clearContents()
             copied = NSPasteboard.general.setString(command, forType: .string)
         }
-        .controlSize(.small)
+        .buttonStyle(CopyButtonStyle())
         .onChange(of: command) { _, _ in copied = false }
+    }
+}
+
+/// Lets the Settings window's dark header run under a transparent title bar, like the app's sheets, with the
+/// traffic lights sitting on the header.
+private struct SettingsWindowChrome: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { Self.configure(view.window) }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { Self.configure(view.window) }
+    }
+
+    private static func configure(_ window: NSWindow?) {
+        guard let window else { return }
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.styleMask.insert(.fullSizeContentView)
+        window.isMovableByWindowBackground = true
+    }
+}
+
+/// The small Copy button inside a command row.
+private struct CopyButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .background(SheetTheme.soft, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(SheetTheme.border))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Rectangle())
     }
 }

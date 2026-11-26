@@ -74,6 +74,11 @@ struct DiaryPage: View {
         .sheet(item: $editing) { entry in
             DiaryEntryEditor(database: snapshot.database, entry: entry, didSave: reload)
         }
+        .onReceive(AppRoute.shared.$diarySetup) { requested in
+            guard requested else { return }
+            DispatchQueue.main.async { AppRoute.shared.diarySetup = false }
+            if !snapshot.projects.isEmpty { setup = SetupTarget(project: project) }
+        }
         .sheet(item: $setup) { target in
             DiarySetupSheet(database: snapshot.database, projects: snapshot.projects, project: target.project) { name in
                 client = snapshot.projects.first { $0.name == name }?.client

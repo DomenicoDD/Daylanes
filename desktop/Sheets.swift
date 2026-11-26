@@ -102,48 +102,8 @@ struct SheetFrame<Content: View, Leading: View>: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
-                if let dot { Circle().fill(dot).frame(width: 11, height: 11) }
-                Text(title)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 12)
-                Button("Close", systemImage: "xmark") { dismiss() }
-                    .buttonStyle(CircleButtonStyle(dark: true))
-                    .disabled(busy)
-                    .help("Close")
-            }
-            if !chips.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
-                        Text(chip)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(SheetTheme.headerChipText)
-                            .lineLimit(1)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(SheetTheme.headerChip, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    }
-                }
-            }
-            if let subtitle {
-                Text(subtitle)
-                    .font(monoSubtitle ? .system(size: 11, design: .monospaced) : .callout)
-                    .foregroundStyle(SheetTheme.headerMuted)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 20)
-        .padding(.bottom, 20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SheetTheme.header)
-        .environment(\.colorScheme, .dark)
+        SheetHeader(title: title, dot: dot, chips: chips, subtitle: subtitle, monoSubtitle: monoSubtitle,
+                    close: { dismiss() }, closeDisabled: busy)
     }
 
     private var footer: some View {
@@ -414,5 +374,202 @@ struct SheetGroup<Content: View>: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+/// The dark band at the top of a sheet or of the Settings window: a big white title, small context chips and a
+/// muted line. `close` adds the round close button; `accessory` sits under the text, such as section tabs.
+struct SheetHeader<Accessory: View>: View {
+    let title: String
+    var dot: Color?
+    var chips: [String] = []
+    var subtitle: String?
+    var monoSubtitle = false
+    /// Extra room above the title, for windows whose traffic lights sit on the header.
+    var topInset: CGFloat = 0
+    var close: (() -> Void)?
+    var closeDisabled = false
+    @ViewBuilder var accessory: () -> Accessory
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                if let dot { Circle().fill(dot).frame(width: 11, height: 11) }
+                Text(title)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 12)
+                if let close {
+                    Button("Close", systemImage: "xmark", action: close)
+                        .buttonStyle(CircleButtonStyle(dark: true))
+                        .disabled(closeDisabled)
+                        .help("Close")
+                }
+            }
+            if !chips.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
+                        Text(chip)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(SheetTheme.headerChipText)
+                            .lineLimit(1)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(SheetTheme.headerChip, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                }
+            }
+            if let subtitle {
+                Text(subtitle)
+                    .font(monoSubtitle ? .system(size: 11, design: .monospaced) : .callout)
+                    .foregroundStyle(SheetTheme.headerMuted)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            accessory()
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 20 + topInset)
+        .padding(.bottom, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SheetTheme.header)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+extension SheetHeader where Accessory == EmptyView {
+    init(title: String, dot: Color? = nil, chips: [String] = [], subtitle: String? = nil, monoSubtitle: Bool = false,
+         topInset: CGFloat = 0, close: (() -> Void)? = nil, closeDisabled: Bool = false) {
+        self.init(title: title, dot: dot, chips: chips, subtitle: subtitle, monoSubtitle: monoSubtitle,
+                  topInset: topInset, close: close, closeDisabled: closeDisabled, accessory: { EmptyView() })
+    }
+}
+
+/// One choice of a mode picker: an icon and title with a short line under it.
+struct SheetModeOption<Value: Hashable> {
+    let value: Value
+    let title: String
+    let detail: String
+    let icon: String
+}
+
+/// Large side-by-side cards that pick how something is set up, such as Copy prompt / Daylanes runs it / MCP.
+/// The sheet then shows the steps for the chosen card only.
+struct SheetModePicker<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [SheetModeOption<Value>]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                let selected = option.value == selection
+                if index > 0 { Rectangle().fill(SheetTheme.border).frame(width: 1) }
+                Button { selection = option.value } label: {
+                    VStack(spacing: 2) {
+                        Label(option.title, systemImage: option.icon)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(selected ? Theme.text : SheetTheme.label)
+                            .lineLimit(1)
+                        Text(option.detail).font(.system(size: 11))
+                            .foregroundStyle(SheetTheme.muted)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
+                    .background(selected ? SheetTheme.fieldFocused : .clear,
+                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(selected ? Theme.text.opacity(0.55) : .clear, lineWidth: 1))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SheetTheme.border))
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// One numbered step, with a line down to the next one like a checklist. A finished step shows a check instead
+/// of its number.
+struct SheetStep<Content: View>: View {
+    let number: Int
+    let title: String
+    var detail: String?
+    var done = false
+    var last = false
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 0) {
+                Group {
+                    if done {
+                        Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.green)
+                    } else {
+                        Text("\(number)")
+                            .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(SheetTheme.label)
+                    }
+                }
+                .frame(width: 22, height: 22)
+                .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(SheetTheme.border))
+                .accessibilityLabel(done ? "Step \(number), done" : "Step \(number)")
+                Rectangle().fill(last ? .clear : SheetTheme.border).frame(width: 1).frame(maxHeight: .infinity)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let detail {
+                        Text(detail).font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                content()
+            }
+            .padding(.top, 2)
+            .padding(.bottom, last ? 0 : 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // Lets the connecting line fill the step's height.
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+extension SheetStep where Content == EmptyView {
+    init(number: Int, title: String, detail: String? = nil, done: Bool = false, last: Bool = false) {
+        self.init(number: number, title: title, detail: detail, done: done, last: last, content: { EmptyView() })
+    }
+}
+
+/// A long command or instruction on one line, with a Copy button: the full text is selectable and copied whole.
+struct SheetCopyRow: View {
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(verbatim: value.replacingOccurrences(of: " \\\n  ", with: " ").replacingOccurrences(of: "\n", with: " "))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1).truncationMode(.tail)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help(value)
+            CommandCopyButton(command: value)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(SheetTheme.border))
     }
 }
