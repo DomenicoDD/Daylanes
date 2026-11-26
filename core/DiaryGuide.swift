@@ -147,10 +147,33 @@ enum DiaryGuide {
 
 /// `tracker [--db PATH] diary guide|work|submit ROUTINE`: the Diary for agents that work from a shell.
 enum DiaryCLI {
-    static let usage = "usage: tracker [--db PATH] diary guide|work|submit ROUTINE_ID [--date YYYY-MM-DD]"
+    static let usage = "usage: tracker [--db PATH] diary list | diary guide|work|submit ROUTINE_ID [--date YYYY-MM-DD]"
+
+    /// Every saved diary with its routine ID and the project's folders, so an agent that was not handed a
+    /// routine ID (for example one started from a plugin) can pick the diary for its working folder.
+    static func list(_ db: Database) throws -> JSON {
+        let routines = try db.query("SELECT project, id FROM diary_routines ORDER BY project")
+        return .array(try routines.map { row in
+            let project = row["project"].string ?? ""
+            let folders = try db.query("SELECT path FROM folders WHERE project = ? ORDER BY path", [project])
+            return .object([
+                ("project", .string(project)),
+                ("client", .optional(try? Store.project(db, project)["client"].string)),
+                ("routine_id", .string((row["id"].string ?? "").lowercased())),
+                ("folders", .strings(folders.compactMap { $0["path"].string })),
+            ])
+        })
+    }
 
     /// Returns the exit status and the text to print.
     static func run(_ arguments: [String], database: String, cli: String, input: () -> Data) -> (Int32, String) {
+        if arguments == ["list"] {
+            do {
+                return (0, try list(try Database.readOnly(database)).pythonText())
+            } catch {
+                return (1, "tracker: \(error.localizedDescription)")
+            }
+        }
         guard arguments.count >= 2, let routine = UUID(uuidString: arguments[1]) else { return (2, usage) }
         let context = OperationContext(databasePath: database, actor: .agent)
         do {

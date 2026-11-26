@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "daylanes": {
+      "type": "stdio",
+      "command": "${PLUGIN_ROOT}/scripts/daylanes",
+      "args": ["mcp"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

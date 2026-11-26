@@ -235,6 +235,10 @@ struct DiaryChecks {
                   && (try DiaryStore.entry(db, project: project, day: tuesday.iso))?.content.headline == "Fixtures shipped",
                   "diary submit saves the piped entry")
         try check(DiaryCLI.run(["publish", routine.id.uuidString], database: path, cli: "x") { Data() }.0 == 2, "unknown diary commands show usage")
+        let (listStatus, listText) = DiaryCLI.run(["list"], database: path, cli: "/bin/TrackerCLI") { Data() }
+        try check(listStatus == 0 && listText.contains("\"routine_id\": \"\(routine.id.uuidString.lowercased())\"")
+                  && listText.contains("\"project\": \"\(other)\"") && listText.contains("\"client\": \"Example Gardens\""),
+                  "diary list names every saved diary with its routine ID and client")
         var greeted = MCP.Session(options: .init(databasePath: path, access: .write, diaryRoutine: routine.id))
         let hello = try JSON.parse(MCP.answer("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}", session: &greeted) ?? "{}")
         try check(hello["result"]["instructions"].stringValue?.contains(routine.brief) == true
