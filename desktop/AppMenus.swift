@@ -69,7 +69,18 @@ struct AppMenuCommands: Commands {
             Divider()
             Button("Set Up a Diary…") { main(.diarySetup) }
             Button("Connect an Agent…") { connectAgent() }
-            Button("Integrations…") { settings(.integrations) }
+            Menu("Integrations") {
+                Button("Toggl Track…") { settings(.integrations) }
+                Button("GitHub…") { settings(.integrations) }
+                Button("Browser Extension…") { settings(.integrations) }
+                #if TRACKER_GOOGLE_CALENDAR
+                Button("Google Calendar…") { settings(.integrations) }
+                #endif
+                Divider()
+                ForEach(AIProvider.allCases) { provider in
+                    Button("\(provider.name)…") { settings(.integrations) }
+                }
+            }
         }
         CommandGroup(replacing: .help) {
             Button("Getting Started…") { main(.welcome) }
