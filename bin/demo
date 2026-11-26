@@ -53,7 +53,12 @@ if [ "$keep" = 0 ] || [ ! -f "$db" ]; then
   defaults write "$bundle_id" activitySpan -string Day
 fi
 
-demo_env nohup "$app/Contents/MacOS/Daylanes" >"$demo/demo.log" 2>&1 &
+# Open it through Launch Services, like a double-click, so screen recorders and the Dock see a normal app.
+# The app gets launchd's environment (not this shell's) plus the demo paths below.
+if ! open -n -a "$app" --env HOME="$home" --env CFFIXED_USER_HOME="$home" --env TRACKER_DB="$db" \
+    --env DAYLANES_DEMO=1 --stdout "$demo/demo.log" --stderr "$demo/demo.log" 2>/dev/null; then
+  demo_env nohup "$app/Contents/MacOS/Daylanes" >"$demo/demo.log" 2>&1 &
+fi
 sleep 2
 osascript -e "tell application id \"$bundle_id\" to activate" >/dev/null 2>&1 || true
 echo "demo: Daylanes with sample data is open (data in $home)"
