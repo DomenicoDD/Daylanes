@@ -11,7 +11,7 @@
 set -eu
 checkout=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 demo=${DAYLANES_DEMO_DIR:-$checkout/build/demo}
-app="$demo/Daylanes.app"
+app="$demo/Daylanes Demo.app"
 bundle_id=com.domenicodidonna.tracker.demo
 home="$demo/home"
 db="$home/.local/share/tracker/ledger.sqlite3"
@@ -49,7 +49,11 @@ case "$demo" in
 esac
 
 if [ "$rebuild" = 1 ] || [ ! -x "$app/Contents/MacOS/Daylanes" ]; then
-  TRACKER_BUILD_DIR="$demo" TRACKER_BUNDLE_ID="$bundle_id" TRACKER_ENABLE_PAYMENTS=0 "$checkout/bin/build-desktop" >/dev/null
+  # Its own name too, so screen recorders and Spotlight never confuse it with the installed Daylanes.
+  TRACKER_BUILD_DIR="$demo" TRACKER_BUNDLE_ID="$bundle_id" TRACKER_BUNDLE_NAME="Daylanes Demo" TRACKER_ENABLE_PAYMENTS=0 \
+    "$checkout/bin/build-desktop" >/dev/null
+  rm -rf "$app"
+  mv "$demo/Daylanes.app" "$app"
 fi
 
 # Quit a running demo copy (only this one: the match is on its full path).
