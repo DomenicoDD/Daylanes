@@ -11,7 +11,7 @@ The plugin is in `plugins/daylanes`. It has two manifests: `.claude-plugin/plugi
 | `codex plugin marketplace add DomenicoDD/Daylanes` | Yes | Yes, through `codex.mcp.json` |
 | Daylanes' **Connect an agent** dialog, or `claude mcp add` / `codex mcp add` | No | Yes |
 
-The MCP server is always the `TrackerCLI mcp` that ships inside Daylanes.app. The skills reach the same data by running `TrackerCLI` in the agent's shell. They work wherever the agent can run commands on the Mac: Claude Code, Cowork on the Mac, Codex and the ChatGPT desktop app. On claude.ai web and mobile chat there is no Mac shell, so the skills can only say that Daylanes is needed.
+The MCP server is always the `TrackerCLI mcp` that ships inside Daylanes.app. The skills reach the same data by running `TrackerCLI` in the agent's shell. They work wherever the agent can run commands directly on the Mac, such as Claude Code and Codex. Cowork runs commands in a Linux sandbox that cannot start Daylanes.app, so Cowork needs the MCP server (untested yet). On claude.ai web and mobile chat there is no Mac shell, so the skills can only say that Daylanes is needed.
 
 When the organization becomes Verified, move the `mcpServers` entry from `.claude-plugin/marketplace.json` back into `plugins/daylanes/.claude-plugin/plugin.json`, bump `version`, and push. The listing picks up the new version for review.
 
@@ -40,7 +40,7 @@ Needs a Pro, Max, Team or Enterprise account, and a GitHub account with push acc
 
 What to expect:
 - Validation should pass with no Blocks.
-- The listing will show Claude Code and Cowork.
+- The listing may show Cowork too, but there the skills only work alongside the MCP server.
 - The safety scan reads the skills. They run only `TrackerCLI` commands, and the README discloses every one of them.
 
 ## OpenAI (Codex and ChatGPT desktop)

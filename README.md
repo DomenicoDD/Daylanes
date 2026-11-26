@@ -195,7 +195,7 @@ The server runs locally over stdio and reads the ledger directly, so it works wi
 
 ### Plugin for Claude and Codex
 
-[`plugins/daylanes`](plugins/daylanes) packages the MCP server with two skills, one that writes the project Diary and one that answers time and cost questions, for Claude Code, Claude Cowork, Codex and the ChatGPT desktop app. It runs the `TrackerCLI` inside the installed app, so it needs Daylanes on the Mac.
+[`plugins/daylanes`](plugins/daylanes) packages the MCP server with two skills, one that writes the project Diary and one that answers time and cost questions, for Claude Code, Codex and the ChatGPT desktop app. It runs the `TrackerCLI` inside the installed app, so it needs Daylanes on the Mac.
 
 ```sh
 claude plugin marketplace add DomenicoDD/Daylanes && claude plugin install daylanes@daylanes

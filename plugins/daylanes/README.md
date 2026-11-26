@@ -1,6 +1,6 @@
 # Daylanes plugin for Claude and Codex
 
-[Daylanes](https://daylanes.app) is a Mac app that tracks consultant time, coding-agent usage and costs per client and project, and keeps a daily project Diary. This plugin connects Claude Code, Claude Cowork, Codex and the ChatGPT desktop app to the Daylanes ledger on your Mac.
+[Daylanes](https://daylanes.app) is a Mac app that tracks consultant time, coding-agent usage and costs per client and project, and keeps a daily project Diary. This plugin connects Claude Code, Codex and the ChatGPT desktop app to the Daylanes ledger on your Mac.
 
 **Requires the Daylanes app on macOS.** [Download Daylanes](https://daylanes.app/download), open it once, then install the plugin. The plugin contains only instructions, no code, and downloads nothing. If Daylanes is not installed, the agent tells you where to get it.
 
@@ -12,7 +12,7 @@
 
 ## What it runs
 
-Everything runs locally on your Mac, so the skills work where the agent can run commands: Claude Code, Cowork on your Mac, Codex and the ChatGPT desktop app.
+Everything runs locally on your Mac, so the skills work where the agent can run commands directly on your Mac, such as Claude Code and Codex. Cowork runs commands in a sandbox that cannot start Daylanes.app, so in Cowork use the MCP server instead (install from the Daylanes marketplace, or add `TrackerCLI mcp` as a local MCP server in the Claude desktop app).
 
 - The skills ask the agent to run the command-line tool inside the app, `/Applications/Daylanes.app/Contents/MacOS/TrackerCLI` (or the copy that Spotlight finds by the app's bundle identifier): `diary list`, `diary guide`, `diary work` and `diary submit` for the Diary, and read-only commands such as `report`, `review` and `billing summary` for questions.
 - The MCP server, when installed, is the same tool started as `TrackerCLI mcp`.
