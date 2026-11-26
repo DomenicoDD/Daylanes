@@ -41,8 +41,9 @@ if [ "$keep" = 0 ] || [ ! -f "$db" ]; then
   mkdir -p "$home/Library/Preferences" "$(dirname "$db")"
   HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" \
     /usr/bin/python3 "$checkout/tools/demo/seed.py" --db "$db" --cli "$app/Contents/MacOS/TrackerCLI" --home "$home"
-  # macOS keeps the demo's settings in ~/Library/Preferences under its own bundle ID: reset them too.
-  defaults delete "$bundle_id" >/dev/null 2>&1 || true
+  # macOS keeps the demo's settings in ~/Library/Preferences under its own bundle ID. Keep the window size,
+  # reset the rest that matters.
+  defaults delete "$bundle_id" snoozedUntil >/dev/null 2>&1 || true
   defaults write "$bundle_id" hasSeenWelcome -bool true
   defaults write "$bundle_id" activitySpan -string Day
 fi
