@@ -56,7 +56,8 @@ fi
 # Open it through Launch Services, like a double-click, so screen recorders and the Dock see a normal app.
 # The app gets launchd's environment (not this shell's) plus the demo paths below.
 if ! open -n -a "$app" --env HOME="$home" --env CFFIXED_USER_HOME="$home" --env TRACKER_DB="$db" \
-    --env DAYLANES_DEMO=1 --stdout "$demo/demo.log" --stderr "$demo/demo.log" 2>/dev/null; then
+    --env DAYLANES_DEMO=1; then
+  echo "demo: open failed, starting the app directly (screen recorders may not list its window)" >&2
   demo_env nohup "$app/Contents/MacOS/Daylanes" >"$demo/demo.log" 2>&1 &
 fi
 sleep 2
