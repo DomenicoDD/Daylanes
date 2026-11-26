@@ -9,6 +9,7 @@
     "url": "https://daylanes.app"
   },
   "homepage": "https://daylanes.app",
+  "documentationUrl": "https://github.com/DomenicoDD/Daylanes/blob/main/plugins/daylanes/README.md",
   "repository": "https://github.com/DomenicoDD/Daylanes",
   "license": "MIT",
   "keywords": [
