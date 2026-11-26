@@ -101,6 +101,10 @@ struct SettingsWindow: View {
         .background(SettingsWindowChrome())
         .navigationTitle("Settings")
         .frame(width: 680, height: 640)
+        // The Settings scene draws its own opaque title bar over the content; hide it and its title
+        // so the dark header runs up behind the traffic lights.
+        .hidingWindowTitle()
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .sheet(item: $sheet) { editor($0) }
         .onReceive(AppRoute.shared.$showAgentSetup) { show in
             guard show else { return }
@@ -970,6 +974,13 @@ struct CommandCopyButton: View {
         }
         .buttonStyle(CopyButtonStyle())
         .onChange(of: command) { _, _ in copied = false }
+    }
+}
+
+private extension View {
+    /// Keeps the window's name for the Window menu and VoiceOver without drawing it in the title bar.
+    @ViewBuilder func hidingWindowTitle() -> some View {
+        if #available(macOS 15.0, *) { toolbar(removing: .title) } else { self }
     }
 }
 
