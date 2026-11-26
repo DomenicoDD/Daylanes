@@ -29,7 +29,10 @@ mkdir -p "$tracker_contents/MacOS" "$tracker_contents/Resources"
 rm -rf "$tracker_contents/Resources/tracker"
 cp desktop/Info.plist "$tracker_contents/Info.plist"
 set --
+# The CLI gets the same payments flag, so a free source build doesn't lock the agent tools (core/LicenceStamp.swift).
+tracker_cli_flags=
 if [ "$tracker_payments" = 1 ]; then
+  tracker_cli_flags="-D TRACKER_PAYMENTS"
   set -- "$@" -D TRACKER_PAYMENTS
 else
   for tracker_key in TrackerPolarAPI TrackerPolarOrganizationID TrackerCheckoutServer TrackerCheckoutLink; do
@@ -88,7 +91,8 @@ xcrun swiftc -target "$tracker_target" -O -parse-as-library "$@" core/*.swift \
   chrome-integration/TrackerChromeWire.swift chrome-integration/TrackerChromeClient.swift \
   -o "$tracker_contents/MacOS/Daylanes"
 # The Swift engine's command line (TrackerCore + cli/main.swift). Unported commands fall back to Python.
-xcrun swiftc -target "$tracker_target" -O core/*.swift cli/main.swift \
+# shellcheck disable=SC2086
+xcrun swiftc -target "$tracker_target" -O $tracker_cli_flags core/*.swift cli/main.swift \
   -o "$tracker_contents/MacOS/TrackerCLI"
 xcrun swiftc -target "$tracker_target" -O -parse-as-library \
   chrome-integration/TrackerChromeWire.swift chrome-integration/TrackerChromeHost.swift chrome-integration/TrackerChromeHostMain.swift \

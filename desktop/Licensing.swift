@@ -98,6 +98,7 @@ final class Licensing: ObservableObject {
             message = error.localizedDescription
             state = State(installID: UUID().uuidString.lowercased(), trialStartedAt: .now)
         }
+        writeStamp()
         await syncTrialIfNeeded()
         await validateIfDue()
         // `status` depends on the clock, so republish it for a trial that ends while the app runs.
@@ -284,6 +285,14 @@ final class Licensing: ObservableObject {
         guard let state, let data = try? Self.encoder.encode(state) else { return }
         do { try IntegrationKeychain.license.save(String(decoding: data, as: UTF8.self)) }
         catch { message = error.localizedDescription }
+        writeStamp()
+    }
+
+    /// Tells the MCP server, `tracker call` and `tracker diary` whether they may run (core/LicenceStamp.swift).
+    /// Any key counts as licensed, like the app's own lock: an offline copy is not locked.
+    private func writeStamp() {
+        guard let state else { return }
+        try? LicenceStamp.write(.init(licensed: state.key != nil, trialEndsAt: Self.trialEnd(state)))
     }
 
     static func activationLimitText(_ limit: Int?) -> String {

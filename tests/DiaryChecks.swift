@@ -86,7 +86,7 @@ struct DiaryChecks {
                                                                "section/Discussion": "Ask about the spare fixture."])
 
         func session(_ profile: DiaryRoutine?, access: MCP.Access = .write) -> MCP.Session {
-            var session = MCP.Session(options: .init(databasePath: path, access: access, diaryRoutine: profile?.id))
+            var session = MCP.Session(options: .init(databasePath: path, access: access, diaryRoutine: profile?.id, lockReason: { nil }))
             let request = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}"
             _ = MCP.answer(request, session: &session)
             return session
@@ -239,7 +239,7 @@ struct DiaryChecks {
         try check(listStatus == 0 && listText.contains("\"routine_id\": \"\(routine.id.uuidString.lowercased())\"")
                   && listText.contains("\"project\": \"\(other)\"") && listText.contains("\"client\": \"Example Gardens\""),
                   "diary list names every saved diary with its routine ID and client")
-        var greeted = MCP.Session(options: .init(databasePath: path, access: .write, diaryRoutine: routine.id))
+        var greeted = MCP.Session(options: .init(databasePath: path, access: .write, diaryRoutine: routine.id, lockReason: { nil }))
         let hello = try JSON.parse(MCP.answer("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}", session: &greeted) ?? "{}")
         try check(hello["result"]["instructions"].stringValue?.contains(routine.brief) == true
                   && hello["result"]["instructions"].stringValue?.contains("submit_diary_entry") == true,
