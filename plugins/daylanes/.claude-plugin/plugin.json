@@ -2,7 +2,7 @@
   "name": "daylanes",
   "displayName": "Daylanes",
   "version": "0.1.0",
-  "description": "Connects Claude to Daylanes, the local Mac time tracker for consultants: ask about hours, agent usage and costs per client and project, and write the daily project Diary. Requires the Daylanes app on macOS and an agent that can run commands (Claude Code or Cowork).",
+  "description": "Connects Claude to Daylanes, the local Mac time tracker for consultants: ask about hours, agent usage and costs per client and project, and write the daily project Diary. Requires the Daylanes app on macOS and an agent that can run commands on the Mac, such as Claude Code.",
   "author": {
     "name": "Domenico Marco Di Donna",
     "email": "support@daylanes.app",
