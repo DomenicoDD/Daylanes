@@ -17,7 +17,7 @@ struct TrackerApp: App {
         .defaultSize(width: 1100, height: 750)
         .commands {
             UpdateCommands()
-            HelpMenuCommands()
+            AppMenuCommands(recorder: lifecycle.recorder)
         }
         Settings {
             SettingsWindow()

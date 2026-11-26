@@ -35,62 +35,47 @@ final class AppRoute: ObservableObject {
     @Published var showAgentSetup = false
 }
 
-/// Replaces the default Help menu, which only says help isn't available. Every page, settings section,
-/// integration and main action is listed here, so typing in the Help menu's search field finds it and
-/// choosing the result opens it.
-struct HelpMenuCommands: Commands {
+/// The menu bar: New Project and Export in File, the pages in View, snoozing and setup in Tracking, and Help
+/// for help and links only. Help search still finds every item, since it searches all menus.
+struct AppMenuCommands: Commands {
+    @ObservedObject var recorder: FocusRecorder
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     var body: some Commands {
-        CommandGroup(replacing: .help) {
-            Menu("Pages") {
-                page("Overview", .overview, key: "1")
-                page("Timeline", .timeline, key: "2")
-                page("Diary", .diary, key: "3")
-                page("Review", .review, key: "4")
-                page("Reports", .reports, key: "5")
-                page("Clients", .clients, key: "6")
-                page("Projects", .projects, key: "7")
-            }
-            Menu("Settings") {
-                ForEach(SettingsSection.allCases) { section in
-                    Button(section.rawValue) { settings(section) }
-                }
-                Divider()
-                Button("Automatic Time Tracking and Snooze") { settings(.general) }
-                Button("Permissions and Startup") { settings(.general) }
-                Button("Billing Rates") { settings(.ai) }
-                Button("Exchange Rate for Billing") { settings(.ai) }
-                Button("Subscriptions") { settings(.ai) }
-                Button("Token Prices") { settings(.ai) }
-                Button("Ledger Location") { settings(.privacy) }
-                Button("Credentials and External Requests") { settings(.privacy) }
-            }
-            Menu("Integrations") {
-                Button("Agent Access (MCP)…") { connectAgent() }
-                Button("Toggl Track") { settings(.integrations) }
-                Button("GitHub") { settings(.integrations) }
-                Button("Browser Extension") { settings(.integrations) }
-                Button("Chrome Profile Clients") { settings(.integrations) }
-                #if TRACKER_GOOGLE_CALENDAR
-                Button("Google Calendar") { settings(.integrations) }
-                #endif
-                Divider()
-                ForEach(AIProvider.allCases) { provider in
-                    Button("\(provider.name) Usage") { settings(.integrations) }
-                }
-            }
-            Divider()
+        CommandGroup(replacing: .newItem) {
             Button("New Project…") { main(.newProject) }
+                .keyboardShortcut("n", modifiers: .command)
             Button("New Client…") { main(.newClient) }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+        }
+        CommandGroup(replacing: .importExport) {
+            Button("Export CSV…") { main(.exportCSV) }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+        }
+        CommandGroup(before: .toolbar) {
+            page("Overview", .overview, key: "1")
+            page("Timeline", .timeline, key: "2")
+            page("Diary", .diary, key: "3")
+            page("Review", .review, key: "4")
+            page("Reports", .reports, key: "5")
+            page("Clients", .clients, key: "6")
+            page("Projects", .projects, key: "7")
+            Divider()
+        }
+        CommandMenu("Tracking") {
+            SnoozeMenuItems(recorder: recorder)
+                .disabled(!recorder.ready)
+            Divider()
             Button("Set Up a Diary…") { main(.diarySetup) }
             Button("Connect an Agent…") { connectAgent() }
-            Button("Export CSV…") { main(.exportCSV) }
-            Button("Show Welcome…") { main(.welcome) }
+            Button("Integrations…") { settings(.integrations) }
+        }
+        CommandGroup(replacing: .help) {
+            Button("Getting Started…") { main(.welcome) }
+            link("Guide: Tracking Time for AI Coding Agents", SiteLinks.agentGuide)
             Divider()
             link("Daylanes Website", SiteLinks.website)
-            link("Guide: Tracking Time for AI Coding Agents", SiteLinks.agentGuide)
             link("Get the Chrome Extension", SiteLinks.chromeExtension)
             link("Privacy Policy", SiteLinks.privacy)
             link("Browser Extension Privacy", SiteLinks.extensionPrivacy)
