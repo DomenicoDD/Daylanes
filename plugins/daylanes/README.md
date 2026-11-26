@@ -1,7 +1,5 @@
 # Daylanes plugin for Claude and Codex
 
-![Daylanes](assets/logo.png)
-
 [Daylanes](https://daylanes.app) is a Mac app that tracks consultant time, coding-agent usage and costs per client and project, and keeps a daily project Diary. This plugin connects Claude Code, Claude Cowork, Codex and the ChatGPT desktop app to the Daylanes ledger on your Mac.
 
 **Requires the Daylanes app on macOS.** [Download Daylanes](https://daylanes.app/download), open it once, then install the plugin. The plugin contains only instructions, no code, and downloads nothing. If Daylanes is not installed, the agent tells you where to get it.
