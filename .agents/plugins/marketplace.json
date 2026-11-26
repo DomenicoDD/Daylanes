@@ -1,0 +1,20 @@
+{
+  "name": "daylanes",
+  "interface": {
+    "displayName": "Daylanes"
+  },
+  "plugins": [
+    {
+      "name": "daylanes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/daylanes"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

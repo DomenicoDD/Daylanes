@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "daylanes",
+  "owner": {
+    "name": "Domenico Marco Di Donna",
+    "email": "support@daylanes.app"
+  },
+  "metadata": {
+    "description": "The Daylanes plugin: local time, agent usage, costs and the project Diary from the Daylanes Mac app."
+  },
+  "plugins": [
+    {
+      "name": "daylanes",
+      "source": "./plugins/daylanes",
+      "description": "Hours, agent usage, costs and the project Diary from the Daylanes Mac app. Requires Daylanes on macOS.",
+      "category": "productivity",
+      "homepage": "https://daylanes.app",
+      "mcpServers": {
+        "daylanes": {
+          "command": "/Applications/Daylanes.app/Contents/MacOS/TrackerCLI",
+          "args": [
+            "mcp"
+          ]
+        }
+      }
+    }
+  ]
+}
