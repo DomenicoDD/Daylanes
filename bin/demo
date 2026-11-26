@@ -1,0 +1,52 @@
+#!/bin/sh
+# Opens a separate copy of Daylanes filled with fictional sample data, for screenshots, videos or a first look.
+# It has its own bundle ID and its own home folder (build/demo/home), so your real ledger, settings, agent logs,
+# browser helper and installed Daylanes are never read or changed. It can run next to the installed app.
+#
+#   bin/demo            build once if needed, reset the sample data, and open it
+#   bin/demo --rebuild  rebuild the app from this checkout first
+#   bin/demo --keep     reopen without resetting the sample data
+#   bin/demo --stop     quit the demo copy
+set -eu
+checkout=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+demo=${DAYLANES_DEMO_DIR:-$checkout/build/demo}
+app="$demo/Daylanes.app"
+bundle_id=com.domenicodidonna.tracker.demo
+home="$demo/home"
+db="$home/.local/share/tracker/ledger.sqlite3"
+rebuild=0 keep=0
+for arg in "$@"; do
+  case "$arg" in
+    --rebuild) rebuild=1 ;;
+    --keep) keep=1 ;;
+    --stop) pkill -f "$app/Contents/MacOS/Daylanes" 2>/dev/null || true; exit 0 ;;
+    *) echo "usage: bin/demo [--rebuild] [--keep] [--stop]" >&2; exit 2 ;;
+  esac
+done
+case "$demo" in
+  "$HOME"|"$HOME/"|/) echo "demo: DAYLANES_DEMO_DIR must be a folder of its own" >&2; exit 2 ;;
+esac
+
+if [ "$rebuild" = 1 ] || [ ! -x "$app/Contents/MacOS/Daylanes" ]; then
+  TRACKER_BUILD_DIR="$demo" TRACKER_BUNDLE_ID="$bundle_id" TRACKER_ENABLE_PAYMENTS=0 "$checkout/bin/build-desktop" >/dev/null
+fi
+
+# Quit a running demo copy (only this one: the match is on its full path).
+pkill -f "$app/Contents/MacOS/Daylanes" 2>/dev/null && sleep 1 || true
+
+if [ "$keep" = 0 ] || [ ! -f "$db" ]; then
+  rm -rf "$home"
+  mkdir -p "$home/Library/Preferences" "$(dirname "$db")"
+  HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" \
+    /usr/bin/python3 "$checkout/tools/demo/seed.py" --db "$db" --cli "$app/Contents/MacOS/TrackerCLI" --home "$home"
+  # Skip the welcome screen and open on the Day view.
+  prefs="$home/Library/Preferences/$bundle_id"
+  defaults write "$prefs" hasSeenWelcome -bool true
+  defaults write "$prefs" activitySpan -string Day
+fi
+
+HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" \
+  nohup "$app/Contents/MacOS/Daylanes" >"$demo/demo.log" 2>&1 &
+sleep 2
+osascript -e "tell application id \"$bundle_id\" to activate" >/dev/null 2>&1 || true
+echo "demo: Daylanes with sample data is open (data in $home)"

@@ -28,6 +28,10 @@ tracker_contents="$tracker_app/Contents"
 mkdir -p "$tracker_contents/MacOS" "$tracker_contents/Resources"
 rm -rf "$tracker_contents/Resources/tracker"
 cp desktop/Info.plist "$tracker_contents/Info.plist"
+# A separate bundle ID (bin/demo uses one) keeps a second copy's settings and permissions apart from the installed app.
+if [ -n "${TRACKER_BUNDLE_ID:-}" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $TRACKER_BUNDLE_ID" "$tracker_contents/Info.plist"
+fi
 set --
 # The CLI gets the same payments flag, so a free source build doesn't lock the agent tools (core/LicenceStamp.swift).
 tracker_cli_flags=
