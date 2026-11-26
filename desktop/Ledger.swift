@@ -648,7 +648,7 @@ final class LedgerModel: ObservableObject {
         let sourceErrors = result?["source_errors"] as? [String] ?? []
         if let error = sourceErrors.first {
             sourceMessage = error
-        } else if sources.values.allSatisfy(\.isEmpty) {
+        } else if sources.values.allSatisfy(\.isEmpty), !FocusRecorder.isDemo {
             sourceMessage = "No local agent history found."
         } else if deferred > 0 {
             sourceMessage = "\(deferred) history files are still changing. Refresh again when the runs finish."

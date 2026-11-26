@@ -1,0 +1,82 @@
+#!/bin/sh
+# Opens a separate copy of Daylanes filled with fictional sample data, for screenshots, videos or a first look.
+# It has its own bundle ID and its own home folder (build/demo/home), so your real ledger, settings, agent logs,
+# browser helper and installed Daylanes are never read or changed. It can run next to the installed app.
+# It shows tracking as on but records nothing (DAYLANES_DEMO=1).
+#
+#   bin/demo            build once if needed, reset the sample data, and open it
+#   bin/demo --rebuild  rebuild the app from this checkout first
+#   bin/demo --keep     reopen without resetting the sample data
+#   bin/demo --stop     quit the demo copy
+set -eu
+checkout=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+demo=${DAYLANES_DEMO_DIR:-$checkout/build/demo}
+app="$demo/Daylanes Demo.app"
+bundle_id=com.domenicodidonna.tracker.demo
+home="$demo/home"
+db="$home/.local/share/tracker/ledger.sqlite3"
+# Today's sample day runs from 09:00. Outside working hours, run the demo in a time zone where it is
+# mid-afternoon now, so "today" is always full. Set DAYLANES_DEMO_TZ to choose one (or "local").
+demo_tz=${DAYLANES_DEMO_TZ:-}
+if [ -z "$demo_tz" ]; then
+  local_hour=$(date +%H | sed 's/^0//')
+  if [ "$local_hour" -lt 11 ] || [ "$local_hour" -ge 20 ]; then
+    utc_hour=$(date -u +%H | sed 's/^0//')
+    offset=$(( (16 - utc_hour + 36) % 24 - 12 ))
+    # Etc/GMT names have the sign reversed: Etc/GMT-9 is UTC+9.
+    if [ "$offset" -ge 0 ]; then demo_tz="Etc/GMT-$offset"; else demo_tz="Etc/GMT+$((-offset))"; fi
+  fi
+fi
+[ "$demo_tz" = local ] && demo_tz=
+tz_env=${demo_tz:+TZ=$demo_tz}
+# A clean environment: only the demo home, so variables such as CODEX_HOME or XDG_DATA_HOME can't point
+# the demo at real agent history.
+demo_env() {
+  env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin USER="${USER:-}" LOGNAME="${LOGNAME:-}" LANG="${LANG:-en_US.UTF-8}" \
+    TMPDIR="${TMPDIR:-/tmp}" HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" DAYLANES_DEMO=1 $tz_env "$@"
+}
+rebuild=0 keep=0
+for arg in "$@"; do
+  case "$arg" in
+    --rebuild) rebuild=1 ;;
+    --keep) keep=1 ;;
+    --stop) pkill -f "$app/Contents/MacOS/Daylanes" 2>/dev/null || true; exit 0 ;;
+    *) echo "usage: bin/demo [--rebuild] [--keep] [--stop]" >&2; exit 2 ;;
+  esac
+done
+case "$demo" in
+  "$HOME"|"$HOME/"|/) echo "demo: DAYLANES_DEMO_DIR must be a folder of its own" >&2; exit 2 ;;
+esac
+
+if [ "$rebuild" = 1 ] || [ ! -x "$app/Contents/MacOS/Daylanes" ]; then
+  # Its own name too, so screen recorders and Spotlight never confuse it with the installed Daylanes.
+  TRACKER_BUILD_DIR="$demo" TRACKER_BUNDLE_ID="$bundle_id" TRACKER_BUNDLE_NAME="Daylanes Demo" TRACKER_ENABLE_PAYMENTS=0 \
+    "$checkout/bin/build-desktop" >/dev/null
+  rm -rf "$app"
+  mv "$demo/Daylanes.app" "$app"
+fi
+
+# Quit a running demo copy (only this one: the match is on its full path).
+pkill -f "$app/Contents/MacOS/Daylanes" 2>/dev/null && sleep 1 || true
+
+if [ "$keep" = 0 ] || [ ! -f "$db" ]; then
+  rm -rf "$home"
+  mkdir -p "$home/Library/Preferences" "$(dirname "$db")"
+  demo_env /usr/bin/python3 "$checkout/tools/demo/seed.py" --db "$db" --cli "$app/Contents/MacOS/TrackerCLI" --home "$home"
+  # macOS keeps the demo's settings in ~/Library/Preferences under its own bundle ID. Keep the window size,
+  # reset the rest that matters.
+  defaults delete "$bundle_id" snoozedUntil >/dev/null 2>&1 || true
+  defaults write "$bundle_id" hasSeenWelcome -bool true
+  defaults write "$bundle_id" activitySpan -string Day
+fi
+
+# Open it through Launch Services, like a double-click, so screen recorders and the Dock see a normal app.
+# The app gets launchd's environment (not this shell's) plus the demo paths below.
+if ! open -n -a "$app" --env HOME="$home" --env CFFIXED_USER_HOME="$home" --env TRACKER_DB="$db" \
+    --env DAYLANES_DEMO=1 ${demo_tz:+--env TZ=$demo_tz}; then
+  echo "demo: open failed, starting the app directly (screen recorders may not list its window)" >&2
+  demo_env nohup "$app/Contents/MacOS/Daylanes" >"$demo/demo.log" 2>&1 &
+fi
+sleep 2
+osascript -e "tell application id \"$bundle_id\" to activate" >/dev/null 2>&1 || true
+echo "demo: Daylanes with sample data is open (data in $home${demo_tz:+, time zone $demo_tz})"
