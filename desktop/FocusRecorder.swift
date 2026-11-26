@@ -92,7 +92,7 @@ final class FocusRecorder: NSObject, ObservableObject {
                 Task { @MainActor in await self?.refreshRules() }
             }
         }
-        if chromeSetup == nil { Task { chromeSetup = await ChromeBridge.install() } }
+        if chromeSetup == nil, !Self.isDemo { Task { chromeSetup = await ChromeBridge.install() } }
         Task { await refreshChromeProfiles() }
         do {
             lease = try RecordingLease()
@@ -157,8 +157,12 @@ final class FocusRecorder: NSObject, ObservableObject {
         UserDefaults.standard.removeObject(forKey: "snoozedUntil")
     }
 
+    /// bin/demo sets DAYLANES_DEMO=1: the sample-data copy shows tracking as on but records nothing real.
+    nonisolated static let isDemo = ProcessInfo.processInfo.environment["DAYLANES_DEMO"] == "1"
+
     private func beginSampling() {
         enabled = true
+        if Self.isDemo { return }
         processActivity = ProcessInfo.processInfo.beginActivity(
             options: .userInitiatedAllowingIdleSystemSleep, reason: "Recording foreground app time"
         )

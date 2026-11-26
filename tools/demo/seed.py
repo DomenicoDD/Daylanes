@@ -10,6 +10,7 @@ Run it only against an empty, throwaway ledger (bin/demo does that). It never to
 import argparse
 import json
 import os
+import pwd
 import random
 import sqlite3
 import subprocess
@@ -176,6 +177,16 @@ def workdays(today, count):
     return list(reversed(days))
 
 
+def make_repo(path, repo):
+    """An empty git repo per sample folder, so the app never walks up into a real checkout around the demo."""
+    os.makedirs(path, exist_ok=True)
+    git = ["git", "-C", path, "-c", "user.name=Sample", "-c", "user.email=sample@example.com"]
+    subprocess.run(git + ["init", "-q", "-b", "main"], check=True, capture_output=True)
+    if repo:
+        subprocess.run(git + ["remote", "add", "origin", f"https://github.com/{repo}.git"], capture_output=True)
+    subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "Initial commit"], check=True, capture_output=True)
+
+
 # ---------- Seeding ----------
 
 def configure(cli, db, home, zone_name):
@@ -187,7 +198,7 @@ def configure(cli, db, home, zone_name):
         run_cli(cli, db, *args)
         for folder in project["folders"]:
             path = os.path.join(home, "Code", folder)
-            os.makedirs(path, exist_ok=True)
+            make_repo(path, project["repo"])
             run_cli(cli, db, "project", "map", name, path)
         run_cli(cli, db, "appearance", "--project", name, "--color", project["color"])
     for name, client in CLIENTS.items():
@@ -331,10 +342,11 @@ def main():
     parser.add_argument("--home", default=None, help="folder for the sample project folders")
     args = parser.parse_args()
     db = os.path.abspath(args.db)
-    real = os.path.join(os.path.expanduser("~"), ".local/share/tracker/ledger.sqlite3")
+    # HOME points at the demo home here, so compare with the account's real home folder.
+    real = os.path.join(pwd.getpwuid(os.getuid()).pw_dir, ".local/share/tracker/ledger.sqlite3")
     if os.path.exists(db) and os.path.getsize(db) > 0:
         sys.exit(f"seed: {db} already exists. Seed only a new, empty ledger.")
-    if os.path.realpath(db) == os.path.realpath(real) and os.environ.get("HOME") == os.path.expanduser("~"):
+    if os.path.realpath(db) == os.path.realpath(real):
         sys.exit("seed: refusing to write to the default ledger.")
     home = args.home or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(db))))
     zone, zone_name = local_zone()

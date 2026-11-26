@@ -2,6 +2,8 @@
 # Opens a separate copy of Daylanes filled with fictional sample data, for screenshots, videos or a first look.
 # It has its own bundle ID and its own home folder (build/demo/home), so your real ledger, settings, agent logs,
 # browser helper and installed Daylanes are never read or changed. It can run next to the installed app.
+# It shows tracking as on but records nothing (DAYLANES_DEMO=1). Today's sample work starts at 09:00,
+# so before 09:40 the Day view is empty for today: step back a day, or run it again later.
 #
 #   bin/demo            build once if needed, reset the sample data, and open it
 #   bin/demo --rebuild  rebuild the app from this checkout first
@@ -39,13 +41,13 @@ if [ "$keep" = 0 ] || [ ! -f "$db" ]; then
   mkdir -p "$home/Library/Preferences" "$(dirname "$db")"
   HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" \
     /usr/bin/python3 "$checkout/tools/demo/seed.py" --db "$db" --cli "$app/Contents/MacOS/TrackerCLI" --home "$home"
-  # Skip the welcome screen and open on the Day view.
-  prefs="$home/Library/Preferences/$bundle_id"
-  defaults write "$prefs" hasSeenWelcome -bool true
-  defaults write "$prefs" activitySpan -string Day
+  # macOS keeps the demo's settings in ~/Library/Preferences under its own bundle ID: reset them too.
+  defaults delete "$bundle_id" >/dev/null 2>&1 || true
+  defaults write "$bundle_id" hasSeenWelcome -bool true
+  defaults write "$bundle_id" activitySpan -string Day
 fi
 
-HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" \
+DAYLANES_DEMO=1 HOME="$home" CFFIXED_USER_HOME="$home" TRACKER_DB="$db" \
   nohup "$app/Contents/MacOS/Daylanes" >"$demo/demo.log" 2>&1 &
 sleep 2
 osascript -e "tell application id \"$bundle_id\" to activate" >/dev/null 2>&1 || true
