@@ -1,13 +1,26 @@
 # Submitting the Daylanes plugin
 
-The plugin lives in `plugins/daylanes` and has two manifests: `.claude-plugin/plugin.json` for Claude and `.codex-plugin/plugin.json` for OpenAI. Bump `version` in both for each release you want the directories to pick up.
+The plugin is in `plugins/daylanes`. It has two manifests: `.claude-plugin/plugin.json` for Claude and `.codex-plugin/plugin.json` for OpenAI. To have the directories pick up a release, bump `version` in both.
 
-Before either submission: merge the plugin PR on `main`, deploy the website so https://daylanes.app/privacy has the "AI agents you connect" section, and try the plugin on a Mac with Daylanes installed:
+## What ships where
+
+| How someone gets it | Skills (Diary, time and costs) | MCP server |
+| --- | --- | --- |
+| Claude directory listing | Yes | No. The directory accepts local MCP servers only from Verified organizations. |
+| `claude plugin install daylanes@daylanes` from this repo | Yes | Yes, added by the entry in `.claude-plugin/marketplace.json` |
+| `codex plugin marketplace add DomenicoDD/Daylanes` | Yes | Yes, through `codex.mcp.json` |
+| Daylanes' **Connect an agent** dialog, or `claude mcp add` / `codex mcp add` | No | Yes |
+
+The MCP server is always the `TrackerCLI mcp` that ships inside Daylanes.app. The skills reach the same data by running `TrackerCLI` in the agent's shell. They work wherever the agent can run commands on the Mac: Claude Code, Cowork on the Mac, Codex and the ChatGPT desktop app. On claude.ai web and mobile chat there is no Mac shell, so the skills can only say that Daylanes is needed.
+
+When the organization becomes Verified, move the `mcpServers` entry from `.claude-plugin/marketplace.json` back into `plugins/daylanes/.claude-plugin/plugin.json`, bump `version`, and push. The listing picks up the new version for review.
+
+Before you submit, try the repo install on a Mac with Daylanes installed:
 
 ```sh
 claude plugin marketplace add DomenicoDD/Daylanes
 claude plugin install daylanes@daylanes
-# in Claude Code: /mcp shows "daylanes" connected; ask "write my Daylanes diary"
+# In Claude Code: /mcp shows "daylanes" connected. Then ask "write my Daylanes diary".
 ```
 
 ## Claude directory (plugin bundle)
@@ -15,17 +28,20 @@ claude plugin install daylanes@daylanes
 Needs a Pro, Max, Team or Enterprise account, and a GitHub account with push access to DomenicoDD/Daylanes.
 
 1. Open https://claude.ai/directory/manage and choose **Submit new → Plugin bundle**.
-2. **Source:** Repository `DomenicoDD/Daylanes`, Plugin path `plugins/daylanes`, Branch `main`. Click **Validate**. Install the Claude GitHub App if asked.
+2. **Source:** Repository `DomenicoDD/Daylanes`, Plugin path `plugins/daylanes`, Branch `main`. Click **Validate**. Install the Claude GitHub App if asked. If it still shows the old findings, click **Re-validate** so it reads the latest `main`.
 3. **Listing details** come from `plugin.json` and the plugin README (read-only).
 4. **Data handling:**
    - Reads or stores personal data: **Yes**. It reads the local Daylanes ledger (project and client names, hours, agent usage, costs, Diary briefs and entries), and the Diary skill saves drafts into it. Everything stays on the Mac.
-   - Sends data to other services: **No**. The plugin makes no network requests. What the agent reads is part of the conversation with Claude.
+   - Sends data to other services: **No**. The skills make no network requests. What the agent reads becomes part of the conversation with Claude.
    - Retention: the plugin keeps nothing. Data stays in the user's local Daylanes ledger until the user deletes it.
    - Intended for under 18: **No**.
 5. **Compliance:** contact email `support@daylanes.app`, and accept the four acknowledgements.
 6. **Review and submit:** updates by **GitHub push webhook**. Leave **Auto-publish passing versions** off for the first release, then click **Submit for review**.
 
-The directory takes local MCP servers and scripts only from Verified organizations, so the directory folder holds skills only. The skills run `TrackerCLI` through the agent's own shell. The repo's Claude marketplace (`.claude-plugin/marketplace.json`) adds the MCP server for people who install from the repository. If the organization becomes Verified, the MCP server can move back into `plugin.json`. The listing will show Claude Code and Cowork. Chat on claude.ai, desktop and mobile ignores local MCP servers, but the skills still load there. Without the app, the skills just say Daylanes is needed.
+What to expect:
+- Validation should pass with no Blocks.
+- The listing will show Claude Code and Cowork.
+- The safety scan reads the skills. They run only `TrackerCLI` commands, and the README discloses every one of them.
 
 ## OpenAI (Codex and ChatGPT desktop)
 
