@@ -25,7 +25,7 @@ Needs a Pro, Max, Team or Enterprise account, and a GitHub account with push acc
 5. **Compliance:** contact email `support@daylanes.app`, and accept the four acknowledgements.
 6. **Review and submit:** updates by **GitHub push webhook**. Leave **Auto-publish passing versions** off for the first release, then click **Submit for review**.
 
-What to expect: a reviewer will probably look at `scripts/daylanes` because it runs a program outside the plugin, Daylanes.app's `TrackerCLI`. The README explains what it runs. The listing will show Claude Code and Cowork. Chat on claude.ai, desktop and mobile ignores local MCP servers, but the skills still load there. Without the app, the skills just say Daylanes is needed.
+The directory takes local MCP servers and scripts only from Verified organizations, so the directory folder holds skills only. The skills run `TrackerCLI` through the agent's own shell. The repo's Claude marketplace (`.claude-plugin/marketplace.json`) adds the MCP server for people who install from the repository. If the organization becomes Verified, the MCP server can move back into `plugin.json`. The listing will show Claude Code and Cowork. Chat on claude.ai, desktop and mobile ignores local MCP servers, but the skills still load there. Without the app, the skills just say Daylanes is needed.
 
 ## OpenAI (Codex and ChatGPT desktop)
 
