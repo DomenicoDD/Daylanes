@@ -344,6 +344,19 @@ struct MCPChecks {
         check(appTime["block_count"].intValue == 2 && appTime["apps"].arrayValue?.first?["app_name"] == .string("Chat")
               && appTime["millis"].intValue == 7_200_000, "unassigned app time is listed by app")
         check(try data("get_status", "{}")["counts"]["unassigned_blocks"].intValue == 2, "status counts the same blocks")
+        check(appTime["apps"].arrayValue?.first?["top_titles"] == .array([]), "no titles are kept unless the setting is on")
+        let detailed = #"[{"id":"44444444-4444-4444-8444-444444444444","app_id":"com.example.chat","app_name":"Chat","started_at":1,"ended_at":60001,"closed":true,"details":[{"title":"Acme launch plan","address":"https://docs.example.com/d/1?token=secret#x","millis":45000},{"title":"Inbox","address":"","millis":15000}]}]"#
+        try Focus.record(ledger, try JSON.parse(detailed))
+        check(try ledger.query("SELECT * FROM focus_details").isEmpty, "details are dropped while the setting is off")
+        try Focus.setKeepDetails(ledger, true)
+        try ledger.execute("DELETE FROM focus_blocks WHERE id = '44444444-4444-4444-8444-444444444444'")
+        try Focus.record(ledger, try JSON.parse(detailed))
+        let kept = try data("list_unassigned_activity", #"{"start":"1970-01-01","end":"1970-01-02"}"#)["apps"].arrayValue?.first
+        check(kept?["top_titles"].arrayValue?.first?["title"] == .string("Acme launch plan")
+              && kept?["top_sites"].arrayValue?.first?["address"] == .string("https://docs.example.com/d/1"),
+              "kept titles and sites show up, without queries or fragments")
+        try Focus.setKeepDetails(ledger, false)
+        check(try ledger.query("SELECT * FROM focus_details").isEmpty, "turning the setting off deletes what was kept")
         _ = try data("assign_activity", #"{"ids":["11111111-1111-4111-8111-111111111111"],"project":"Site"}"#)
         _ = try data("assign_activity", #"{"ids":["22222222-2222-4222-8222-222222222222"],"ignore":true}"#)
         check(try data("list_unassigned_activity", "{}")["block_count"].intValue == 0, "assigned and ignored blocks leave the list")

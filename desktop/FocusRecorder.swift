@@ -36,6 +36,8 @@ final class FocusRecorder: NSObject, ObservableObject {
     @Published private(set) var lastChromeTab: ChromeObservation?
     @Published private(set) var chromeProfileCatalog = ChromeProfile.Catalog(profiles: [], requiresImport: false)
     @Published private(set) var chromeProfileClients: [String: String] = [:]
+    /// Settings → Your data: keep window titles and page addresses with recorded time.
+    @Published private(set) var keepDetails = false
     var chromeProfiles: [ChromeProfile] { chromeProfileCatalog.profiles }
     /// Whether this app installed the Chrome helper, checked once at launch.
     @Published private(set) var chromeSetup: ChromeBridge.Setup?
@@ -236,6 +238,7 @@ final class FocusRecorder: NSObject, ObservableObject {
         autoRulesOff = Set(preferences.autoRulesOff ?? [])
         githubRoutes = preferences.githubRoutes
         chromeProfileClients = preferences.chromeProfileClients ?? [:]
+        keepDetails = preferences.keepDetails ?? false
         if var tab = lastChromeTab {
             tab.rematch(rules: rules, automatic: autoRules, routes: githubRoutes)
             if tab != lastChromeTab { lastChromeTab = tab }
@@ -347,6 +350,10 @@ final class FocusRecorder: NSObject, ObservableObject {
         try await importChromeProfiles(from: url)
     }
 
+    func setKeepDetails(_ keep: Bool) async throws {
+        try await applyRuleChange(["details", "--state", keep ? "on" : "off"])
+    }
+
     func setChromeProfileClient(_ client: String?, for profileID: String) async throws {
         let destination = client.map { "--client=\($0)" } ?? "--clear"
         try await applyRuleChange(["chrome-client", profileID, destination])
@@ -422,10 +429,13 @@ final class FocusRecorder: NSObject, ObservableObject {
                         chromeProfile: String? = nil, chromeProfileID: String? = nil, browserTitle: String? = nil) {
         var observation = raw
         if let app = observation.app, observation.idle < FocusSession.idleLimit {
-            let shouldReadTitle = !autoRules.isEmpty || rules.contains {
+            let shouldReadTitle = keepDetails || !autoRules.isEmpty || rules.contains {
                 $0.needsWindowTitle && $0.appliesToApp(app.name, id: app.id)
             }
             let title = shouldReadTitle && WindowTitles.authorized ? browserTitle ?? pid.flatMap(WindowTitles.focusedTitle) : nil
+            if keepDetails, title != nil || tab != nil {
+                observation.detail = ActivityDetail(title: title ?? "", address: tab?.originAndPath ?? "")
+            }
             observation.github = tab.flatMap { GitHubPage(tab: $0, routes: githubRoutes) }
             let githubMatch = observation.github?.match(in: githubRoutes)
             let resolution = FocusRule.resolve(rules: rules, app: app.name, appID: app.id, title: title, tab: tab,

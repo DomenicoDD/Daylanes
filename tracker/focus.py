@@ -64,6 +64,30 @@ def record(conn, blocks):
             conn.execute("INSERT OR IGNORE INTO focus_github VALUES (?, ?, ?)", (key, repo, number))
         if changed.rowcount and client is not None:
             conn.execute("INSERT OR IGNORE INTO focus_clients SELECT ?, name FROM clients WHERE name = ?", (key, client))
+        details = None if ignored else block.get("details")
+        if changed.rowcount and details is not None and store.setting(conn, "keep_activity_details", "0") == "1":
+            store_details(conn, key, details)
+
+
+def store_details(conn, key, details):
+    """The titles and addresses seen during a block (core/Focus.swift `storeDetails`)."""
+    if not isinstance(details, list) or len(details) > 20:
+        raise ValueError("Expected up to 20 activity details")
+    rows = {}
+    for item in details:
+        millis = item.get("millis") if isinstance(item, dict) else None
+        if type(millis) is not int or millis < 0:
+            raise ValueError("Invalid activity detail")
+        title = (item.get("title") or "").strip()[:300]
+        address = re.split(r"[?#]", item.get("address") or "", maxsplit=1)[0][:512]
+        if address and not address.startswith(("https://", "http://")):
+            address = ""
+        if title or address:
+            previous = rows.get((title, address), 0)
+            rows[(title, address)] = previous + millis
+    conn.execute("DELETE FROM focus_details WHERE block_id = ?", (key,))
+    conn.executemany("INSERT INTO focus_details VALUES (?, ?, ?, ?)",
+                     [(key, title, address, millis) for (title, address), millis in rows.items()])
 
 
 def config(conn):
@@ -73,7 +97,8 @@ def config(conn):
             "rules": [dict(row, ignore=True) if row["project"] is None else dict(row) for row in rules],
             "auto_rules": auto_rules(conn),
             "auto_rules_off": sorted(auto_rules_off(conn)), "github_routes": github.routes(conn),
-            "chrome_profile_clients": chrome_clients}
+            "chrome_profile_clients": chrome_clients,
+            "keep_details": store.setting(conn, "keep_activity_details", "0") == "1"}
 
 
 def set_chrome_profile_client(conn, profile_id, client):

@@ -246,9 +246,10 @@ struct FocusConfig: Decodable {
     let autoRulesOff: [String]?
     let githubRoutes: [String: GitHubRoute]
     let chromeProfileClients: [String: String]?
+    let keepDetails: Bool?
 
     enum CodingKeys: String, CodingKey {
         case enabled, rules, autoRules = "auto_rules", autoRulesOff = "auto_rules_off", githubRoutes = "github_routes"
-        case chromeProfileClients = "chrome_profile_clients"
+        case chromeProfileClients = "chrome_profile_clients", keepDetails = "keep_details"
     }
 }

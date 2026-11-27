@@ -82,7 +82,62 @@ enum Focus {
             if changed > 0, let client = client.stringValue {
                 try db.execute("INSERT OR IGNORE INTO focus_clients SELECT ?, name FROM clients WHERE name = ?", [key, client])
             }
+            if changed > 0, !ignored, !block["details"].isNull, try keepsDetails(db) {
+                try storeDetails(db, block: key, block["details"])
+            }
         }
+    }
+
+    // MARK: Window titles and page addresses (opt-in)
+
+    static let detailsSetting = "keep_activity_details"
+    static let maxDetails = 20
+
+    static func keepsDetails(_ db: Database) throws -> Bool {
+        try Store.setting(db, detailsSetting, "0") == "1"
+    }
+
+    /// Turning the setting off deletes every title and address kept so far.
+    static func setKeepDetails(_ db: Database, _ enabled: Bool) throws {
+        try Store.setSetting(db, detailsSetting, enabled ? "1" : "0")
+        if !enabled { try db.execute("DELETE FROM focus_details") }
+    }
+
+    /// The titles and addresses seen during a block, with the time on each. The recorder sends the whole set
+    /// with every checkpoint, so it replaces what was stored. Queries and fragments never reach the ledger.
+    static func storeDetails(_ db: Database, block: String, _ details: JSON) throws {
+        guard let list = details.arrayValue, list.count <= maxDetails else {
+            throw EngineError.invalid("Expected up to \(maxDetails) activity details")
+        }
+        var rows: [String: (title: String, address: String, millis: Int)] = [:]
+        for item in list {
+            guard item.pairs != nil, case let .int(millis) = item["millis"], millis >= 0 else {
+                throw EngineError.invalid("Invalid activity detail")
+            }
+            let title = String((item["title"].stringValue ?? "").pythonStripped.prefix(300))
+            var address = item["address"].stringValue ?? ""
+            address = String(address.prefix { $0 != "?" && $0 != "#" }.prefix(512))
+            if !address.isEmpty, !(address.hasPrefix("https://") || address.hasPrefix("http://")) { address = "" }
+            guard !title.isEmpty || !address.isEmpty else { continue }
+            let key = title + "\u{1F}" + address
+            rows[key] = (title, address, (rows[key]?.millis ?? 0) + Int(millis))
+        }
+        try db.execute("DELETE FROM focus_details WHERE block_id = ?", [block])
+        for row in rows.values {
+            try db.execute("INSERT INTO focus_details VALUES (?, ?, ?, ?)", [block, row.title, row.address, row.millis])
+        }
+    }
+
+    /// The titles and sites that took the most time in a set of blocks, for review.
+    static func topDetails(_ db: Database, where condition: String, _ parameters: [SQLBindable], limit: Int = 5) throws -> (titles: JSON, sites: JSON) {
+        let titles = try db.query(
+            "SELECT title, sum(millis) AS millis FROM focus_details JOIN focus_blocks ON focus_blocks.id = focus_details.block_id "
+            + "WHERE title != '' AND \(condition) GROUP BY title ORDER BY millis DESC, title LIMIT ?", parameters + [limit])
+        let sites = try db.query(
+            "SELECT address, sum(millis) AS millis FROM focus_details JOIN focus_blocks ON focus_blocks.id = focus_details.block_id "
+            + "WHERE address != '' AND \(condition) GROUP BY address ORDER BY millis DESC, address LIMIT ?", parameters + [limit])
+        return (.array(titles.map { .object([("title", $0["title"].json), ("millis", $0["millis"].json)]) }),
+                .array(sites.map { .object([("address", $0["address"].json), ("millis", $0["millis"].json)]) }))
     }
 
     static func config(_ db: Database) throws -> JSON {
@@ -92,7 +147,8 @@ enum Focus {
         return .object([("enabled", .bool(try Store.setting(db, "focus_enabled", "0") == "1")),
                         ("rules", .array(rules)), ("auto_rules", .array(try autoRules(db))),
                         ("auto_rules_off", JSON.strings(pythonSorted(try autoRulesOff(db)))),
-                        ("github_routes", try GitHub.routesJSON(db)), ("chrome_profile_clients", .object(chromeClients))])
+                        ("github_routes", try GitHub.routesJSON(db)), ("chrome_profile_clients", .object(chromeClients)),
+                        ("keep_details", .bool(try keepsDetails(db)))])
     }
 
     static func setChromeProfileClient(_ db: Database, profileID: String, client: String?) throws {
@@ -467,11 +523,16 @@ enum Focus {
         return .object([
             ("start", .string(bounds.0)), ("end_exclusive", .string(bounds.1)),
             ("block_count", .int(Int64(total?[0].int ?? 0))), ("millis", .int(Int64(total?[1].int ?? 0))),
-            ("apps", .array(rows.map { row in
-                .object([("app_id", row["app_id"].json), ("app_name", row["app_name"].json), ("client", row["client"].json),
+            ("keeps_details", .bool(try keepsDetails(db))),
+            ("apps", .array(try rows.map { row in
+                let top = try topDetails(db, where: "project IS NULL AND ignored = 0 AND closed = 1 AND ended_at > ? AND started_at < ? "
+                                         + "AND app_id = ? AND app_name = ?",
+                                         [since, until, row["app_id"].string ?? "", row["app_name"].string ?? ""])
+                return .object([("app_id", row["app_id"].json), ("app_name", row["app_name"].json), ("client", row["client"].json),
                          ("blocks", row["blocks"].json), ("millis", row["millis"].json),
                          ("last_at", AgentOperations.instant(row["last_at"].int, zone: zone)),
-                         ("sample_block_id", row["sample_block_id"].json)])
+                         ("sample_block_id", row["sample_block_id"].json),
+                         ("top_titles", top.titles), ("top_sites", top.sites)])
             })),
         ])
     }

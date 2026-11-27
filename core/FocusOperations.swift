@@ -45,6 +45,11 @@ enum FocusOperations {
             try Store.setSetting(db, "focus_enabled", try Params(params).bool("enabled") ? "1" : "0")
             return try Focus.config(db)
         },
+        EngineOperation(name: "set_activity_details", summary: "Keep window titles and page addresses with recorded time, or delete them.",
+                        effect: .config) { params, db, _ in
+            try Focus.setKeepDetails(db, try Params(params).bool("enabled"))
+            return try Focus.config(db)
+        },
         EngineOperation(name: "save_rule", summary: "Assign or ignore future app, window, domain or URL activity.",
                         effect: .config) { params, db, _ in
             let p = Params(params)

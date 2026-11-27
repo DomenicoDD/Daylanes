@@ -72,7 +72,21 @@ struct FocusSessionChecks {
         assert(FocusRule.match(rules: [appRule, client, other], app: "Browser", title: "Café Client") == nil)
         assert(FocusRule.match(rules: [client], app: "Editor", title: "Café Client") == nil)
 
-        // Automatic name rules match whole words only; saved window rules still match any part of the title.
+        // Titles and addresses add up per block when the recorder passes them
+        var titled = FocusSession()
+        func seen(_ elapsed: Double, _ title: String) -> FocusObservation {
+            var next = observation(elapsed)
+            next.detail = ActivityDetail(title: title, address: "")
+            return next
+        }
+        _ = titled.observe(seen(0, "Plan"))
+        _ = titled.observe(seen(2, "Plan"))
+        _ = titled.observe(seen(3, "Inbox"))
+        let titledBlock = titled.stop()
+        assert(titledBlock.first?.details[ActivityDetail(title: "Plan", address: "")] == 3)
+        assert(titledBlock.first?.details[ActivityDetail(title: "Inbox", address: "")] == nil)
+
+                // Automatic name rules match whole words only; saved window rules still match any part of the title.
         let named = FocusRule(id: "auto:project:Tracker", field: "window", keyword: "Tracker", appScope: nil,
                               tag: nil, project: "Tracker", automatic: "project")
         func automatic(_ title: String) -> FocusRule? {

@@ -107,6 +107,11 @@ CREATE TABLE IF NOT EXISTS focus_clients (
     block_id TEXT PRIMARY KEY REFERENCES focus_blocks(id) ON DELETE CASCADE,
     client TEXT NOT NULL REFERENCES clients(name) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS focus_details (
+    block_id TEXT NOT NULL REFERENCES focus_blocks(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', millis INTEGER NOT NULL CHECK (millis >= 0),
+    PRIMARY KEY (block_id, title, address)
+);
 CREATE TABLE IF NOT EXISTS diary_routines (
     project TEXT PRIMARY KEY REFERENCES projects(name) ON UPDATE CASCADE ON DELETE CASCADE,
     id TEXT NOT NULL UNIQUE, profile TEXT NOT NULL

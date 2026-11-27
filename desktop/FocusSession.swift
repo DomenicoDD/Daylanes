@@ -19,6 +19,14 @@ struct FocusObservation {
     var match: FocusRule? = nil
     var github: GitHubPage? = nil
     var client: String? = nil
+    /// The window title and page address, when Settings keeps them.
+    var detail: ActivityDetail? = nil
+}
+
+/// A window title and page address (origin and path only) the person spent time on.
+struct ActivityDetail: Hashable, Encodable {
+    let title: String
+    let address: String
 }
 
 struct FocusBlock: Encodable, Identifiable {
@@ -30,10 +38,16 @@ struct FocusBlock: Encodable, Identifiable {
     let client: String?
     var end: Date
     var closed = false
+    /// Time on each title and address during the block, sent only when Settings keeps them.
+    var details: [ActivityDetail: TimeInterval] = [:]
 
     enum CodingKeys: String, CodingKey {
         case id, appID = "app_id", appName = "app_name"
-        case start = "started_at", end = "ended_at", closed, match, github, client, ignored
+        case start = "started_at", end = "ended_at", closed, match, github, client, ignored, details
+    }
+
+    private struct DetailTime: Encodable {
+        let title: String, address: String, millis: Int64
     }
 
     func encode(to encoder: Encoder) throws {
@@ -50,6 +64,11 @@ struct FocusBlock: Encodable, Identifiable {
             try output.encodeIfPresent(match, forKey: .match)
             try output.encodeIfPresent(github, forKey: .github)
             try output.encodeIfPresent(client, forKey: .client)
+            if !details.isEmpty {
+                let top = details.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key.title < $1.key.title }.prefix(20)
+                try output.encode(top.map { DetailTime(title: $0.key.title, address: $0.key.address,
+                                                       millis: Int64(($0.value * 1000).rounded())) }, forKey: .details)
+            }
         }
     }
 }
@@ -102,6 +121,9 @@ struct FocusSession {
                                      client: observation.client, end: end)
         } else {
             activeBlock?.end = end
+        }
+        if let detail = observation.detail {
+            activeBlock?.details[detail, default: 0] += end.timeIntervalSince(start)
         }
     }
 

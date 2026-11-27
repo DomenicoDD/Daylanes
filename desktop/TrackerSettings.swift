@@ -754,6 +754,8 @@ struct TrackerSettings: View {
                 }
             }
             Divider()
+            ActivityDetailsSettings()
+            Divider()
             VStack(alignment: .leading, spacing: 7) {
                 heading("Credentials & external requests")
                 Text("Daylanes stores Toggl Track and AI provider credentials in macOS Keychain. You can replace or remove them in Integrations. Daylanes never displays saved keys or includes them in the ledger or CSV exports.")
@@ -766,6 +768,36 @@ struct TrackerSettings: View {
 
     private func heading(_ title: String) -> some View {
         Text(title).font(.system(size: 13, weight: .semibold)).accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Keep window titles and page addresses with recorded time, so time with no project can be sorted later.
+private struct ActivityDetailsSettings: View {
+    @EnvironmentObject private var recorder: FocusRecorder
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Toggle("Keep window titles and page addresses", isOn: Binding(
+                get: { recorder.keepDetails },
+                set: { keep in
+                    saving = true
+                    error = nil
+                    Task {
+                        do { try await recorder.setKeepDetails(keep) }
+                        catch { self.error = error.localizedDescription }
+                        saving = false
+                    }
+                }
+            ))
+            .disabled(saving || !recorder.ready)
+            Text("Saves the titles and sites you spent time on in the ledger, so you or a connected agent can sort time that no rule matched. Addresses keep only the site and path. Turning this off deletes the saved titles and addresses.")
+                .font(.callout).foregroundStyle(.secondary)
+            if let error {
+                Label(error, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
+            }
+        }
     }
 }
 

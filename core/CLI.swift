@@ -115,6 +115,10 @@ enum CLI {
             "--client": .value("client"), "--clear": .constant("client", .null),
         ], oneOf: [["--client", "--clear"]], operation: "set_chrome_profile_client"),
         Command(words: ["focus", "delete-rule"], positionals: ["id"], operation: "delete_rule"),
+        Command(words: ["focus", "details"], options: ["--state": .value("state", choices: ["on", "off"])], required: ["--state"],
+                operation: "set_activity_details", route: { params in
+                    ("set_activity_details", .object([("enabled", .bool(params["state"].stringValue == "on"))]))
+                }),
         Command(words: ["focus", "auto-rules"], positionals: ["project"],
                 options: ["--state": .value("state", choices: ["on", "off"])], required: ["--state"],
                 operation: "set_auto_rules", route: { params in
