@@ -155,65 +155,14 @@ struct DiarySetupSheet: View {
     }
 
     private var modePicker: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(Mode.allCases.enumerated()), id: \.offset) { index, option in
-                let selected = option == mode
-                if index > 0 { Rectangle().fill(SheetTheme.border).frame(width: 1) }
-                Button { mode = option } label: {
-                    VStack(spacing: 2) {
-                        Label(option.title, systemImage: option.icon)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(selected ? Theme.text : SheetTheme.label)
-                        Text(option.detail).font(.system(size: 11))
-                            .foregroundStyle(SheetTheme.muted)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(selected ? SheetTheme.fieldFocused : .clear,
-                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .strokeBorder(selected ? Theme.text.opacity(0.55) : .clear, lineWidth: 1))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selected ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SheetTheme.border))
-        .fixedSize(horizontal: false, vertical: true)
+        SheetModePicker(selection: $mode, options: Mode.allCases.map {
+            SheetModeOption(value: $0, title: $0.title, detail: $0.detail, icon: $0.icon)
+        })
     }
 
-    /// One numbered step, with a line down to the next one like a checklist.
     private func step<Content: View>(_ number: Int, _ title: String, _ detail: String? = nil, last: Bool = false,
-                                     @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 0) {
-                Text("\(number)")
-                    .font(.system(size: 11, weight: .semibold)).monospacedDigit()
-                    .foregroundStyle(SheetTheme.label)
-                    .frame(width: 22, height: 22)
-                    .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(SheetTheme.border))
-                Rectangle().fill(last ? .clear : SheetTheme.border).frame(width: 1).frame(maxHeight: .infinity)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 13, weight: .semibold))
-                    if let detail {
-                        Text(detail).font(.system(size: 12)).foregroundStyle(SheetTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                content()
-            }
-            .padding(.top, 2)
-            .padding(.bottom, last ? 0 : 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        // Lets the connecting line fill the step's height.
-        .fixedSize(horizontal: false, vertical: true)
+                                     @ViewBuilder content: @escaping () -> Content) -> some View {
+        SheetStep(number: number, title: title, detail: detail, last: last, content: content)
     }
 
     @ViewBuilder
@@ -300,22 +249,7 @@ struct DiarySetupSheet: View {
         }
     }
 
-    /// A long command or instruction on one line, with a Copy button: the full text is selectable and copied whole.
-    private func copyRow(_ value: String) -> some View {
-        HStack(spacing: 8) {
-            Text(verbatim: value.replacingOccurrences(of: " \\\n  ", with: " ").replacingOccurrences(of: "\n", with: " "))
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Theme.text)
-                .lineLimit(1).truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help(value)
-            CommandCopyButton(command: value)
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 32)
-        .background(SheetTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(SheetTheme.border))
-    }
+    private func copyRow(_ value: String) -> some View { SheetCopyRow(value: value) }
 
     private var dailyRunLabel: String {
         let minutes = (try? DiaryClock.minutes(cutoff)) ?? 300

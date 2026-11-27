@@ -17,12 +17,11 @@ struct TrackerApp: App {
         .defaultSize(width: 1100, height: 750)
         .commands {
             UpdateCommands()
-            HelpMenuCommands()
+            AppMenuCommands(recorder: lifecycle.recorder)
         }
         Settings {
             SettingsWindow()
                 .licenceGate()
-                .frame(width: 660, height: 560)
                 .environmentObject(lifecycle.recorder)
                 .environmentObject(lifecycle.ledger)
                 .withGoogleCalendar(lifecycle)
@@ -259,6 +258,11 @@ struct Dashboard: View {
             Text(model.error ?? "")
         }
         .sheet(item: $sheet) { item in editor(item) }
+        .onReceive(AppRoute.shared.$request) { request in
+            guard let request else { return }
+            DispatchQueue.main.async { AppRoute.shared.request = nil }
+            handle(request)
+        }
         .sheet(isPresented: $showWelcome, onDismiss: { hasSeenWelcome = true }) {
             WelcomeScreen { page = .project($0) }
         }
@@ -1513,6 +1517,23 @@ struct Dashboard: View {
         }
         if remember { args += ["--save-folder"] }
         return args
+    }
+
+    /// Runs a request from the Help menu.
+    private func handle(_ request: AppRoute.Request) {
+        switch request {
+        case let .page(target): page = target
+        case .newProject: sheet = .project(nil, nil)
+        case .newClient: sheet = .client(nil)
+        case .welcome: showWelcome = true
+        case .diarySetup:
+            page = .diary
+            AppRoute.shared.diarySetup = true
+        case .exportCSV:
+            if let snapshot = model.snapshot, model.busy == nil {
+                DispatchQueue.main.async { export(snapshot) }
+            }
+        }
     }
 
     private func export(_ snapshot: Snapshot) {
