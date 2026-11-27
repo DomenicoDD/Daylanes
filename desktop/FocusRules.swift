@@ -247,9 +247,11 @@ struct FocusConfig: Decodable {
     let githubRoutes: [String: GitHubRoute]
     let chromeProfileClients: [String: String]?
     let keepDetails: Bool?
+    let slackWorkspaceClients: [SlackWorkspaceClient]?
 
     enum CodingKeys: String, CodingKey {
         case enabled, rules, autoRules = "auto_rules", autoRulesOff = "auto_rules_off", githubRoutes = "github_routes"
         case chromeProfileClients = "chrome_profile_clients", keepDetails = "keep_details"
+        case slackWorkspaceClients = "slack_workspace_clients"
     }
 }

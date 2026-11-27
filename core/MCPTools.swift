@@ -223,6 +223,14 @@ enum MCPTools {
                 description: "Delete a saved rule by the ID returned by list_rules. Time it already sorted keeps its project; only future activity stops matching. Automatic name rules (IDs starting auto:) can't be deleted; turn them off in the project's settings instead.",
                 properties: [("id", string("The saved rule ID from list_rules."))],
                 required: ["id"], operation: "delete_tracking_rule", toolset: "setup"),
+        MCPTool(name: "delete_activity_details", title: "Delete kept titles and addresses",
+                description: "Delete the window titles and page addresses Daylanes kept with recorded time: all of them, those of some blocks, or those of a period. The time itself stays. Only do this when the person asks.",
+                properties: [
+                    ("all", boolean("Delete every kept title and address.")),
+                    ("ids", strings("Only these block IDs, from get_week or get_day.")),
+                    ("start", string("First day of a period, in the ledger's time zone. Give it together with end.", format: "date")),
+                    ("end", string("The day after the last day (exclusive).", format: "date")),
+                ], operation: "delete_activity_details", toolset: "setup"),
         MCPTool(name: "assign_activity", title: "Assign recorded time",
                 description: "Put recorded blocks from get_week or get_day in a project, keep them in Ignored, or send them back to review. Give a project, or ignore, or neither to unassign. Blocks still being recorded are refused. Use a tracking rule as well when the same activity will come back.",
                 properties: [
@@ -236,6 +244,14 @@ enum MCPTools {
                     ("profile_id", string("A local Chrome profile ID from list_chrome_profiles.")),
                     ("client", string("The client, by name. An empty string removes the link.")),
                 ], required: ["profile_id", "client"], operation: "set_chrome_profile_client", toolset: "setup"),
+        MCPTool(name: "set_slack_workspace_client", title: "Link a Slack workspace to a client",
+                description: "Count future Slack time in a workspace for a client when no rule picks a project. Give the desktop workspace name as Slack shows it in its window titles, or the workspace ID (T…) or an app.slack.com URL for Slack in the browser. Pass id from list_rules to edit a link, and an empty client to remove it.",
+                properties: [
+                    ("desktop_name", string("The workspace name in the Slack app's window titles.")),
+                    ("workspace", string("A Slack workspace ID or app.slack.com URL.")),
+                    ("id", string("An existing link's ID from list_rules (slack_workspace_clients).")),
+                    ("client", string("The client, by name. An empty string removes the link.")),
+                ], required: ["client"], operation: "set_slack_workspace_client", toolset: "setup"),
         MCPTool(name: "sync_agents", title: "Read new agent history",
                 description: "Read the coding agents' local history on this Mac into the ledger, so list_unassigned and the reports include the latest runs. The app does this on its own every few minutes; call it before a review that needs the last hour.",
                 properties: [

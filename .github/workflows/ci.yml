@@ -20,7 +20,7 @@ jobs:
         run: |
           set -eu
           out="$(mktemp -d)"
-          xcrun swiftc desktop/ChromeTabs.swift desktop/FocusRules.swift desktop/FocusSession.swift tests/FocusSessionChecks.swift -o "$out/focus"
+          xcrun swiftc desktop/ChromeTabs.swift desktop/FocusRules.swift desktop/FocusSession.swift core/SlackTracking.swift tests/FocusSessionChecks.swift -o "$out/focus"
           "$out/focus"
           xcrun swiftc -parse-as-library desktop/ReportBuilder.swift desktop/ReportCSV.swift desktop/ReportData.swift \
             desktop/ReportOptions.swift desktop/ReportStrings.swift desktop/ReportPDF.swift tests/ReportChecks.swift -o "$out/reports"

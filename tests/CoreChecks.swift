@@ -36,6 +36,7 @@ struct CoreChecks {
         rules()
         try chromeProfiles()
         try chromeProfileClients()
+        try slackWorkspaceClients()
         try trackingRuleSaves()
         try timelineTime()
         try ledger()
@@ -361,6 +362,50 @@ struct CoreChecks {
         let historical = try run("focus", "timeline", "--day=\(day)")["blocks"].arrayValue!
         check(historical.first { $0["id"] == .string(ids[0]) }?["client"] == .string("Renamed client"),
               "existing time keeps its client when a mapping is cleared")
+    }
+
+    static func slackWorkspaceClients() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("slack-client-checks-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let environment = ["TRACKER_DB": folder.appendingPathComponent("ledger.sqlite3").path]
+
+        @discardableResult
+        func run(_ args: String...) throws -> JSON {
+            guard let data = try CLI.run(args, environment: environment), !data.isEmpty else { return .null }
+            return try JSON.parse(data)
+        }
+
+        let channelURL = "https://app.slack.com/client/TWORKSPACE/CCHANNEL"
+        let browser = SlackTrackingContext.browser(channelURL + "?thread_ts=1.23")!
+        let title = "#website (Channel) - Acme - Studio - Slack"
+        let desktop = SlackTrackingContext.desktop("(4) " + title)!
+        let signedInNames = (1...12).map { "Workspace \($0)" }
+        check(SlackWorkspaceMenu.names(beforeSeparator: signedInNames + ["workspace 1", "", "Sign in to Another Workspace…"]) == signedInNames,
+              "Slack discovery lists all signed-in names and skips duplicate names and menu actions")
+        check(SlackWorkspaceMenu.names(beforeSeparator: ["Sign in to Another Workspace…"]) == nil,
+              "an unrecognized Slack menu does not produce workspace names")
+        check(browser.channelRule == .website(channelURL), "Slack website rules discard message and thread context")
+        check(desktop.channelRule == .windowTitle(title), "Slack desktop rules scope the channel to the workspace and ignore unread counts")
+        check(SlackTrackingContext.browser("https://app.slack.com.example.test/client/TWORKSPACE/CCHANNEL") == nil,
+              "a non-Slack tab cannot supply Slack workspace context")
+        check(SlackTrackingContext.browser("https://app.slack.com/client/TWORKSPACE/DCONVERSATION")?.channelRule == nil
+              && SlackTrackingContext.desktop("A person - Acme - Studio - Slack")?.channelRule == nil,
+              "Slack DMs supply only workspace context")
+
+        try run("client", "save", "Slack client")
+        let config = try run("focus", "slack-client", "--workspace=\(channelURL)", "--desktop-name=Acme - Studio", "--client=Slack client")
+        let mappings = try JSONDecoder().decode([SlackWorkspaceClient].self, from: Data(config["slack_workspace_clients"].pythonText().utf8))
+        check(mappings.count == 1 && mappings[0].workspaceID == "TWORKSPACE", "a pasted channel URL saves just the workspace ID")
+        check(SlackWorkspaceClient.match(browser, in: mappings)?.client == "Slack client"
+              && SlackWorkspaceClient.match(desktop, in: mappings)?.client == "Slack client", "browser and desktop share the client mapping")
+        expectError("already mapped") {
+            try run("focus", "slack-client", "--desktop-name=acme - studio", "--client=Slack client")
+        }
+        try run("client", "save", "Renamed Slack client", "--previous=Slack client")
+        try check(run("focus", "config")["slack_workspace_clients"].arrayValue?.first?["client"] == .string("Renamed Slack client"),
+                  "client renames preserve the Slack workspace mapping")
+        try run("focus", "slack-client", "--id=\(mappings[0].id)", "--clear")
+        try check(run("focus", "config")["slack_workspace_clients"].arrayValue?.isEmpty == true, "Slack mappings can be removed")
     }
 
     static func trackingRuleSaves() throws {

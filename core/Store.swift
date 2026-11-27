@@ -73,6 +73,7 @@ enum Store {
         if let previous, name != previous {
             try db.execute("UPDATE projects SET client = ? WHERE client = ?", [name, previous])
             try db.execute("UPDATE chrome_profile_clients SET client = ? WHERE client = ?", [name, previous])
+            try db.execute("UPDATE slack_workspace_clients SET client = ? WHERE client = ?", [name, previous])
             try db.execute("UPDATE focus_clients SET client = ? WHERE client = ?", [name, previous])
             try db.execute("DELETE FROM clients WHERE name = ?", [previous])
             try db.execute("UPDATE billing_terms SET name = ? WHERE scope = 'client' AND name = ?", [name, previous])

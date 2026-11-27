@@ -41,6 +41,14 @@ enum FocusOperations {
             try Focus.setChromeProfileClient(db, profileID: try p.required("profile_id"), client: try p.string("client").flatMap { $0.isEmpty ? nil : $0 })
             return try Focus.config(db)
         },
+        EngineOperation(name: "set_slack_workspace_client", summary: "Set the fallback client for future Slack activity in a workspace.",
+                        effect: .config) { params, db, _ in
+            let p = Params(params)
+            try Focus.setSlackWorkspaceClient(db, id: try p.string("id"), workspace: try p.string("workspace"),
+                                              desktopName: try p.string("desktop_name"),
+                                              client: try p.string("client").flatMap { $0.isEmpty ? nil : $0 })
+            return try Focus.config(db)
+        },
         EngineOperation(name: "set_tracking_enabled", summary: "Turn foreground app tracking on or off.", effect: .config) { params, db, _ in
             try Store.setSetting(db, "focus_enabled", try Params(params).bool("enabled") ? "1" : "0")
             return try Focus.config(db)
@@ -49,6 +57,17 @@ enum FocusOperations {
                         effect: .config) { params, db, _ in
             try Focus.setKeepDetails(db, try Params(params).bool("enabled"))
             return try Focus.config(db)
+        },
+        EngineOperation(name: "delete_activity_details", summary: "Delete kept window titles and page addresses.",
+                        effect: .guarded) { params, db, _ in
+            let p = Params(params)
+            var since: Int?, until: Int?
+            if p.has("start") || p.has("end") {
+                let range = try EntryStore.dayRange(db, start: try p.string("start"), end: try p.string("end"), period: "week")
+                (since, until) = (range.since, range.until)
+            }
+            let deleted = try Focus.deleteDetails(db, all: try p.bool("all"), blocks: try p.strings("ids"), since: since, until: until)
+            return .object([("deleted", .int(Int64(deleted)))])
         },
         EngineOperation(name: "save_rule", summary: "Assign or ignore future app, window, domain or URL activity.",
                         effect: .config) { params, db, _ in

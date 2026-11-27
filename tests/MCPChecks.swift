@@ -227,7 +227,8 @@ struct MCPChecks {
         let writable = try send("tools/list")["result"]["tools"].arrayValue ?? []
         let writers = writable.filter { $0["annotations"]["readOnlyHint"] == .bool(false) }.compactMap { $0["name"].stringValue }
         check(Set(writers) == ["create_client", "set_up_project", "move_project", "map_folder", "create_tracking_rule", "update_tracking_rule",
-                               "delete_tracking_rule", "assign_activity", "set_chrome_profile_client", "sync_agents"],
+                               "delete_tracking_rule", "assign_activity", "set_chrome_profile_client", "sync_agents",
+                               "delete_activity_details", "set_slack_workspace_client"],
               "write access adds the setup tools only")
         check(writable.first { $0["name"].stringValue == "delete_tracking_rule" }?["annotations"]["destructiveHint"] == .bool(true),
               "deleting a rule is marked destructive")
@@ -356,7 +357,19 @@ struct MCPChecks {
               && kept?["top_sites"].arrayValue?.first?["address"] == .string("https://docs.example.com/d/1"),
               "kept titles and sites show up, without queries or fragments")
         try Focus.setKeepDetails(ledger, false)
-        check(try ledger.query("SELECT * FROM focus_details").isEmpty, "turning the setting off deletes what was kept")
+        check(try ledger.query("SELECT * FROM focus_details").count == 2, "turning the setting off keeps what was saved")
+        check(try tool("delete_activity_details", "{}")["isError"] == .bool(true), "deleting needs a choice")
+        check(try data("delete_activity_details", #"{"ids":["44444444-4444-4444-8444-444444444444"]}"#)["deleted"].intValue == 2,
+              "kept titles of a block can be deleted")
+        try Focus.setKeepDetails(ledger, true)
+        try ledger.execute("DELETE FROM focus_blocks WHERE id = '44444444-4444-4444-8444-444444444444'")
+        try Focus.record(ledger, try JSON.parse(detailed))
+        check(try data("delete_activity_details", #"{"start":"1970-01-01","end":"1970-01-02"}"#)["deleted"].intValue == 2,
+              "kept titles of a period can be deleted")
+        try ledger.execute("DELETE FROM focus_blocks WHERE id = '44444444-4444-4444-8444-444444444444'")
+        try Focus.record(ledger, try JSON.parse(detailed))
+        check(try data("delete_activity_details", #"{"all":true}"#)["deleted"].intValue == 2
+              && (try ledger.query("SELECT * FROM focus_details").isEmpty), "all deletes everything kept")
         _ = try data("assign_activity", #"{"ids":["11111111-1111-4111-8111-111111111111"],"project":"Site"}"#)
         _ = try data("assign_activity", #"{"ids":["22222222-2222-4222-8222-222222222222"],"ignore":true}"#)
         check(try data("list_unassigned_activity", "{}")["block_count"].intValue == 0, "assigned and ignored blocks leave the list")
@@ -369,6 +382,12 @@ struct MCPChecks {
               .isNull, "an empty client removes the link")
         check(try tool("set_chrome_profile_client", #"{"profile_id":"Profile 12","client":"Nobody"}"#)["isError"] == .bool(true),
               "an unknown client is refused")
+        let slack = try data("set_slack_workspace_client", #"{"desktop_name":"Acme HQ","client":"Acme"}"#)["slack_workspace_clients"]
+        check(slack.arrayValue?.first?["desktop_name"] == .string("Acme HQ") && slack.arrayValue?.first?["client"] == .string("Acme"),
+              "a Slack workspace links to a client")
+        let slackID = slack.arrayValue?.first?["id"].stringValue ?? ""
+        check(try data("set_slack_workspace_client", #"{"id":"\#(slackID)","client":""}"#)["slack_workspace_clients"] == .array([]),
+              "an empty client removes the Slack link")
         var plain = MCP.Session(options: MCP.Options(databasePath: database, lockReason: { nil }))
         plain.initialized = true
         check(!plain.tools.contains { $0.toolset == "setup" }, "a read connection never gets the setup tools")

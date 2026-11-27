@@ -321,6 +321,9 @@ struct TrackerSettings: View {
             togglCard
             gitHubCard
             chromeCard
+            SlackTrackingSettings(clients: snapshot.clients, projects: snapshot.projects) {
+                Task { await model.reload() }
+            }
             #if TRACKER_GOOGLE_CALENDAR
             GoogleCalendarSettings()
             #endif
@@ -774,6 +777,7 @@ struct TrackerSettings: View {
 /// Keep window titles and page addresses with recorded time, so time with no project can be sorted later.
 private struct ActivityDetailsSettings: View {
     @EnvironmentObject private var recorder: FocusRecorder
+    @State private var confirmingDelete = false
     @State private var saving = false
     @State private var error: String?
 
@@ -792,8 +796,24 @@ private struct ActivityDetailsSettings: View {
                 }
             ))
             .disabled(saving || !recorder.ready)
-            Text("Saves the titles and sites you spent time on in the ledger, so you or a connected agent can sort time that no rule matched. Addresses keep only the site and path. Turning this off deletes the saved titles and addresses.")
+            Text("Saves the titles and sites you spent time on in the ledger, so you or a connected agent can sort time that no rule matched. Addresses keep only the site and path. Turning this off stops saving new ones and keeps what was saved.")
                 .font(.callout).foregroundStyle(.secondary)
+            Button("Delete saved titles and addresses…") { confirmingDelete = true }
+                .buttonStyle(.link)
+                .disabled(saving || !recorder.ready)
+                .confirmationDialog("Delete every saved window title and page address?", isPresented: $confirmingDelete) {
+                    Button("Delete", role: .destructive) {
+                        saving = true
+                        error = nil
+                        Task {
+                            do { try await recorder.deleteDetails() }
+                            catch { self.error = error.localizedDescription }
+                            saving = false
+                        }
+                    }
+                } message: {
+                    Text("Your recorded time and projects stay. This can't be undone.")
+                }
             if let error {
                 Label(error, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
             }

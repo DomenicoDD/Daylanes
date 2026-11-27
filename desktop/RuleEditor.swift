@@ -271,6 +271,7 @@ struct RuleSheet: View {
     var initialProject: String?
     var appHint: FocusRow?
     var tabHint: ChromeObservation?
+    var slackHint: SlackTrackingContext.ChannelRule?
     var didCreateProject: () -> Void = {}
 
     @State private var field = "window"
@@ -464,6 +465,19 @@ struct RuleSheet: View {
             return
         }
         project = initialProject ?? ""
+        if let slackHint {
+            switch slackHint {
+            case let .website(url):
+                field = "website"
+                website = url
+            case let .windowTitle(title):
+                field = "window"
+                windowTitle = title
+                windowAppID = SlackTrackingContext.desktopAppID
+                windowAppName = "Slack"
+            }
+            return
+        }
         if let appHint { setApp(name: appHint.appName, id: appHint.appID) }
         if let tabHint {
             field = "website"

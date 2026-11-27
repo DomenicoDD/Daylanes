@@ -227,6 +227,13 @@ def parser():
     destination = chrome_client.add_mutually_exclusive_group(required=True)
     destination.add_argument("--client")
     destination.add_argument("--clear", action="store_true")
+    slack_client = focus_actions.add_parser("slack-client", help="Set the fallback client for a Slack workspace")
+    slack_client.add_argument("--id")
+    slack_client.add_argument("--workspace")
+    slack_client.add_argument("--desktop-name")
+    slack_destination = slack_client.add_mutually_exclusive_group(required=True)
+    slack_destination.add_argument("--client")
+    slack_destination.add_argument("--clear", action="store_true")
     rule = focus_actions.add_parser("save-rule", help="Assign or ignore future app, window, domain, or URL activity")
     rule.add_argument("--id")
     action = rule.add_mutually_exclusive_group(required=True)
@@ -400,6 +407,9 @@ def run(conn, args):
             print_json(focus.config(conn))
         elif args.action == "chrome-client":
             focus.set_chrome_profile_client(conn, args.profile_id, args.client)
+            print_json(focus.config(conn))
+        elif args.action == "slack-client":
+            focus.set_slack_workspace_client(conn, args.id, args.workspace, args.desktop_name, args.client)
             print_json(focus.config(conn))
         elif args.action == "save-rule":
             focus.save_rule(conn, args.project, args.field, args.keyword, args.app_scope, args.tag, args.id,

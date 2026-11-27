@@ -36,6 +36,8 @@ final class FocusRecorder: NSObject, ObservableObject {
     @Published private(set) var lastChromeTab: ChromeObservation?
     @Published private(set) var chromeProfileCatalog = ChromeProfile.Catalog(profiles: [], requiresImport: false)
     @Published private(set) var chromeProfileClients: [String: String] = [:]
+    @Published private(set) var slackWorkspaceClients: [SlackWorkspaceClient] = []
+    @Published private(set) var lastSlackContext: SlackTrackingContext?
     /// Settings → Your data: keep window titles and page addresses with recorded time.
     @Published private(set) var keepDetails = false
     var chromeProfiles: [ChromeProfile] { chromeProfileCatalog.profiles }
@@ -239,8 +241,10 @@ final class FocusRecorder: NSObject, ObservableObject {
         githubRoutes = preferences.githubRoutes
         chromeProfileClients = preferences.chromeProfileClients ?? [:]
         keepDetails = preferences.keepDetails ?? false
+        slackWorkspaceClients = preferences.slackWorkspaceClients ?? []
         if var tab = lastChromeTab {
-            tab.rematch(rules: rules, automatic: autoRules, routes: githubRoutes)
+            let client = slackClient(for: SlackTrackingContext.browser(tab.address.originAndPath))
+            tab.rematch(rules: rules, automatic: client == nil ? autoRules : [], routes: githubRoutes)
             if tab != lastChromeTab { lastChromeTab = tab }
         }
     }
@@ -354,9 +358,25 @@ final class FocusRecorder: NSObject, ObservableObject {
         try await applyRuleChange(["details", "--state", keep ? "on" : "off"])
     }
 
+    func deleteDetails() async throws {
+        _ = try await Ledger.run(["focus", "delete-details", "--all"])
+    }
+
     func setChromeProfileClient(_ client: String?, for profileID: String) async throws {
         let destination = client.map { "--client=\($0)" } ?? "--clear"
         try await applyRuleChange(["chrome-client", profileID, destination])
+    }
+
+    func setSlackWorkspaceClient(id: String?, workspace: String?, desktopName: String?, client: String?) async throws {
+        var args = ["slack-client", client.map { "--client=\($0)" } ?? "--clear"]
+        if let id { args.append("--id=\(id)") }
+        if let workspace { args.append("--workspace=\(workspace)") }
+        if let desktopName { args.append("--desktop-name=\(desktopName)") }
+        try await applyRuleChange(args)
+    }
+
+    private func slackClient(for context: SlackTrackingContext?) -> String? {
+        context.flatMap { SlackWorkspaceClient.match($0, in: slackWorkspaceClients)?.client }
     }
 
     func chromeProfileName(_ id: String) -> String {
@@ -429,23 +449,30 @@ final class FocusRecorder: NSObject, ObservableObject {
                         chromeProfile: String? = nil, chromeProfileID: String? = nil, browserTitle: String? = nil) {
         var observation = raw
         if let app = observation.app, observation.idle < FocusSession.idleLimit {
-            let shouldReadTitle = keepDetails || !autoRules.isEmpty || rules.contains {
+            let isSlackDesktop = app.id == SlackTrackingContext.desktopAppID
+            let shouldReadTitle = keepDetails || isSlackDesktop || !autoRules.isEmpty || rules.contains {
                 $0.needsWindowTitle && $0.appliesToApp(app.name, id: app.id)
             }
             let title = shouldReadTitle && WindowTitles.authorized ? browserTitle ?? pid.flatMap(WindowTitles.focusedTitle) : nil
             if keepDetails, title != nil || tab != nil {
                 observation.detail = ActivityDetail(title: title ?? "", address: tab?.originAndPath ?? "")
             }
+            let slack = isSlackDesktop ? title.flatMap(SlackTrackingContext.desktop)
+                : tab.flatMap { SlackTrackingContext.browser($0.originAndPath) }
+            let workspaceClient = slackClient(for: slack)
             observation.github = tab.flatMap { GitHubPage(tab: $0, routes: githubRoutes) }
             let githubMatch = observation.github?.match(in: githubRoutes)
             let resolution = FocusRule.resolve(rules: rules, app: app.name, appID: app.id, title: title, tab: tab,
                                                chromeWindow: chromeWindow, chromeProfile: chromeProfile,
-                                               chromeProfileID: chromeProfileID, githubMatch: githubMatch, automatic: autoRules)
+                                               chromeProfileID: chromeProfileID, githubMatch: githubMatch,
+                                               automatic: workspaceClient == nil ? autoRules : [])
             observation.match = resolution.rule
             if observation.match?.isIgnored == true {
                 observation.github = nil
-            } else if let chromeProfileID {
-                observation.client = chromeProfileClients[chromeProfileID]
+            } else {
+                // A mapped workspace is more specific than the browser's profile. Explicit tracking rules still win.
+                observation.client = workspaceClient ?? chromeProfileID.flatMap { chromeProfileClients[$0] }
+                if let slack, lastSlackContext != slack { lastSlackContext = slack }
             }
             if let tab {
                 let seen = ChromeObservation(address: tab, windowName: chromeWindow, profile: chromeProfile,

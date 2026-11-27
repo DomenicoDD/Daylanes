@@ -61,6 +61,19 @@ struct FocusSessionChecks {
         let unmapped = focus.observe(observation(2, app: browser))
         assert(unmapped.count == 1 && unmapped[0].client == "Other" && focus.activeBlock == nil)
 
+        let slackURL = "https://app.slack.com/client/TWORKSPACE/CCHANNEL"
+        let slackTitle = "#website (Channel) - Acme - Slack"
+        let websiteRule = FocusRule(id: "slack-browser", field: "url", keyword: slackURL, appScope: nil,
+                                    tag: nil, project: "Website")
+        let desktopRule = FocusRule(id: "slack-desktop", field: "window", keyword: slackTitle, appScope: nil,
+                                    tag: nil, project: "Website", appID: SlackTrackingContext.desktopAppID)
+        assert(FocusRule.match(rules: [websiteRule], app: "Chrome", title: nil,
+                               tab: TabAddress(slackURL + "?thread_ts=1.23")) == websiteRule)
+        assert(FocusRule.match(rules: [desktopRule], app: "Slack", appID: SlackTrackingContext.desktopAppID,
+                               title: "(4) " + slackTitle) == desktopRule)
+        assert(FocusRule.match(rules: [desktopRule], app: "Slack", appID: SlackTrackingContext.desktopAppID,
+                               title: "#website (Channel) - Another workspace - Slack") == nil)
+
         let appRule = FocusRule(id: "app", field: "app", keyword: "browser", appScope: nil,
                                 tag: nil, project: "General")
         let client = FocusRule(id: "client", field: "window", keyword: "café client", appScope: "browser",

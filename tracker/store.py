@@ -103,6 +103,11 @@ CREATE TABLE IF NOT EXISTS focus_github (
 CREATE TABLE IF NOT EXISTS chrome_profile_clients (
     profile_id TEXT PRIMARY KEY, client TEXT NOT NULL REFERENCES clients(name) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS slack_workspace_clients (
+    id TEXT PRIMARY KEY, workspace_id TEXT UNIQUE, desktop_name TEXT COLLATE NOCASE UNIQUE,
+    client TEXT NOT NULL REFERENCES clients(name) ON DELETE CASCADE,
+    CHECK (workspace_id IS NOT NULL OR desktop_name IS NOT NULL)
+);
 CREATE TABLE IF NOT EXISTS focus_clients (
     block_id TEXT PRIMARY KEY REFERENCES focus_blocks(id) ON DELETE CASCADE,
     client TEXT NOT NULL REFERENCES clients(name) ON DELETE CASCADE
@@ -383,6 +388,7 @@ def save_client(conn, name, previous=None):
     if previous is not None and name != previous:
         conn.execute("UPDATE projects SET client = ? WHERE client = ?", (name, previous))
         conn.execute("UPDATE chrome_profile_clients SET client = ? WHERE client = ?", (name, previous))
+        conn.execute("UPDATE slack_workspace_clients SET client = ? WHERE client = ?", (name, previous))
         conn.execute("UPDATE focus_clients SET client = ? WHERE client = ?", (name, previous))
         conn.execute("DELETE FROM clients WHERE name = ?", (previous,))
         conn.execute("UPDATE billing_terms SET name = ? WHERE scope = 'client' AND name = ?", (name, previous))

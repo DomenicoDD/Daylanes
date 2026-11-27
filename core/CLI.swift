@@ -114,7 +114,14 @@ enum CLI {
         Command(words: ["focus", "chrome-client"], positionals: ["profile_id"], options: [
             "--client": .value("client"), "--clear": .constant("client", .null),
         ], oneOf: [["--client", "--clear"]], operation: "set_chrome_profile_client"),
+        Command(words: ["focus", "slack-client"], options: [
+            "--id": .value("id"), "--workspace": .value("workspace"), "--desktop-name": .value("desktop_name"),
+            "--client": .value("client"), "--clear": .constant("client", .null),
+        ], oneOf: [["--client", "--clear"]], operation: "set_slack_workspace_client"),
         Command(words: ["focus", "delete-rule"], positionals: ["id"], operation: "delete_rule"),
+        Command(words: ["focus", "delete-details"], options: [
+            "--all": .flag("all"), "--block": .append("ids"), "--start": .value("start"), "--end": .value("end"),
+        ], operation: "delete_activity_details"),
         Command(words: ["focus", "details"], options: ["--state": .value("state", choices: ["on", "off"])], required: ["--state"],
                 operation: "set_activity_details", route: { params in
                     ("set_activity_details", .object([("enabled", .bool(params["state"].stringValue == "on"))]))

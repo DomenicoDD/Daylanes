@@ -1,6 +1,7 @@
 import json
 from datetime import date, datetime, time, timedelta
 import re
+import unicodedata
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
@@ -93,11 +94,14 @@ def store_details(conn, key, details):
 def config(conn):
     rules = conn.execute("SELECT * FROM focus_rules ORDER BY field, keyword COLLATE NOCASE, id")
     chrome_clients = dict(conn.execute("SELECT profile_id, client FROM chrome_profile_clients ORDER BY profile_id"))
+    slack_clients = conn.execute(
+        "SELECT * FROM slack_workspace_clients ORDER BY coalesce(desktop_name, workspace_id) COLLATE NOCASE, id"
+    )
     return {"enabled": store.setting(conn, "focus_enabled", "0") == "1",
             "rules": [dict(row, ignore=True) if row["project"] is None else dict(row) for row in rules],
             "auto_rules": auto_rules(conn),
             "auto_rules_off": sorted(auto_rules_off(conn)), "github_routes": github.routes(conn),
-            "chrome_profile_clients": chrome_clients,
+            "chrome_profile_clients": chrome_clients, "slack_workspace_clients": [dict(row) for row in slack_clients],
             "keep_details": store.setting(conn, "keep_activity_details", "0") == "1"}
 
 
@@ -113,6 +117,56 @@ def set_chrome_profile_client(conn, profile_id, client):
     conn.execute(
         "INSERT INTO chrome_profile_clients VALUES (?, ?) ON CONFLICT(profile_id) DO UPDATE SET client = excluded.client",
         (profile_id, client),
+    )
+
+
+def slack_workspace_id(workspace):
+    value = workspace.strip()
+    if re.fullmatch(r"[TE][A-Z0-9]{2,31}", value.upper()):
+        return value.upper()
+    try:
+        url = urlsplit(value)
+        parts = url.path.split("/")
+        if (url.scheme == "https" and url.hostname == "app.slack.com" and url.port in (None, 443)
+                and url.username is None and url.password is None and len(parts) >= 3
+                and parts[:2] == ["", "client"] and re.fullmatch(r"[TE][A-Z0-9]{2,31}", parts[2])):
+            return parts[2]
+    except ValueError:
+        pass
+    return None
+
+
+def set_slack_workspace_client(conn, mapping_id, workspace, desktop_name, client):
+    conn.execute("BEGIN IMMEDIATE")
+    if mapping_id is not None:
+        mapping_id = str(UUID(mapping_id))
+        if not conn.execute("SELECT 1 FROM slack_workspace_clients WHERE id = ?", (mapping_id,)).fetchone():
+            raise ValueError("This Slack workspace mapping no longer exists")
+    if client is None:
+        if mapping_id is None:
+            raise ValueError("Choose a Slack workspace mapping to clear")
+        conn.execute("DELETE FROM slack_workspace_clients WHERE id = ?", (mapping_id,))
+        return
+    workspace_id = slack_workspace_id(workspace) if workspace is not None else None
+    name = unicodedata.normalize("NFC", desktop_name.strip()) if desktop_name is not None else None
+    if workspace is not None and workspace_id is None:
+        raise ValueError("Enter a Slack workspace ID or browser URL")
+    if name is not None and (not name or len(name) > 150 or any(unicodedata.category(c) in {"Cc", "Cf"} for c in name)):
+        raise ValueError("Use a Slack desktop workspace name of up to 150 characters")
+    if workspace_id is None and name is None:
+        raise ValueError("Enter a Slack workspace ID or desktop name")
+    if client not in store.client_list(conn):
+        raise ValueError(f"Unknown client: {client}")
+    for existing in conn.execute("SELECT id, workspace_id, desktop_name FROM slack_workspace_clients"):
+        if existing["id"] != mapping_id and (workspace_id is not None and existing["workspace_id"] == workspace_id
+                or name is not None and (existing["desktop_name"] or "").lower() == name.lower()):
+            raise ValueError("This Slack workspace is already mapped. Edit its existing mapping.")
+    conn.execute("INSERT OR IGNORE INTO clients VALUES (?)", (client,))
+    conn.execute(
+        "INSERT INTO slack_workspace_clients (id, workspace_id, desktop_name, client) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(id) DO UPDATE SET workspace_id = excluded.workspace_id, "
+        "desktop_name = excluded.desktop_name, client = excluded.client",
+        (mapping_id or str(uuid4()), workspace_id, name, client),
     )
 
 

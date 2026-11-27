@@ -97,10 +97,29 @@ enum Focus {
         try Store.setting(db, detailsSetting, "0") == "1"
     }
 
-    /// Turning the setting off deletes every title and address kept so far.
+    /// Turning the setting off stops new titles; what was kept stays until it is deleted on purpose.
     static func setKeepDetails(_ db: Database, _ enabled: Bool) throws {
         try Store.setSetting(db, detailsSetting, enabled ? "1" : "0")
-        if !enabled { try db.execute("DELETE FROM focus_details") }
+    }
+
+    /// Deletes kept titles and addresses: all of them, those of some blocks, or those of blocks in a time range.
+    @discardableResult
+    static func deleteDetails(_ db: Database, all: Bool, blocks: [String]?, since: Int?, until: Int?) throws -> Int {
+        if all {
+            guard blocks == nil, since == nil else { throw EngineError.invalid("Choose all, some blocks, or a period") }
+            return try db.execute("DELETE FROM focus_details")
+        }
+        if let blocks {
+            guard !blocks.isEmpty, blocks.count <= 1000, since == nil else {
+                throw EngineError.invalid("Give between 1 and 1,000 block IDs, without a period")
+            }
+            var deleted = 0
+            for id in blocks { deleted += try db.execute("DELETE FROM focus_details WHERE block_id = ?", [id]) }
+            return deleted
+        }
+        guard let since, let until else { throw EngineError.invalid("Choose all, some blocks, or a period") }
+        return try db.execute("DELETE FROM focus_details WHERE block_id IN "
+                              + "(SELECT id FROM focus_blocks WHERE ended_at > ? AND started_at < ?)", [since, until])
     }
 
     /// The titles and addresses seen during a block, with the time on each. The recorder sends the whole set
@@ -144,10 +163,12 @@ enum Focus {
         let rules = try db.query("SELECT * FROM focus_rules ORDER BY field, keyword COLLATE NOCASE, id").map(ruleObject)
         let chromeClients = try db.query("SELECT profile_id, client FROM chrome_profile_clients ORDER BY profile_id")
             .compactMap { row in row["profile_id"].string.map { ($0, row["client"].json) } }
+        let slackClients = try db.query("SELECT * FROM slack_workspace_clients ORDER BY coalesce(desktop_name, workspace_id) COLLATE NOCASE, id")
         return .object([("enabled", .bool(try Store.setting(db, "focus_enabled", "0") == "1")),
                         ("rules", .array(rules)), ("auto_rules", .array(try autoRules(db))),
                         ("auto_rules_off", JSON.strings(pythonSorted(try autoRulesOff(db)))),
                         ("github_routes", try GitHub.routesJSON(db)), ("chrome_profile_clients", .object(chromeClients)),
+                        ("slack_workspace_clients", .array(slackClients.map(\.object))),
                         ("keep_details", .bool(try keepsDetails(db)))])
     }
 
@@ -162,6 +183,40 @@ enum Focus {
         try db.execute("INSERT OR IGNORE INTO clients VALUES (?)", [client])
         try db.execute("INSERT INTO chrome_profile_clients VALUES (?, ?) ON CONFLICT(profile_id) DO UPDATE SET client = excluded.client",
                        [profileID, client])
+    }
+
+    static func setSlackWorkspaceClient(_ db: Database, id: String?, workspace: String?, desktopName: String?, client: String?) throws {
+        let id = try id.map(canonicalUUID)
+        if let id, try db.first("SELECT 1 FROM slack_workspace_clients WHERE id = ?", [id]) == nil {
+            throw EngineError.notFound("This Slack workspace mapping no longer exists")
+        }
+        guard let client else {
+            guard let id else { throw EngineError.invalid("Choose a Slack workspace mapping to clear") }
+            try db.execute("DELETE FROM slack_workspace_clients WHERE id = ?", [id])
+            return
+        }
+
+        let workspaceID = workspace.flatMap(SlackTrackingContext.workspaceID(fromInput:))
+        let name = desktopName.flatMap(SlackTrackingContext.workspaceName)
+        if workspace != nil && workspaceID == nil { throw EngineError.invalid("Enter a Slack workspace ID or browser URL") }
+        if desktopName != nil && name == nil { throw EngineError.invalid("Use a Slack desktop workspace name of up to 150 characters") }
+        guard workspaceID != nil || name != nil else { throw EngineError.invalid("Enter a Slack workspace ID or desktop name") }
+        guard try Store.clientList(db).contains(client) else { throw EngineError.notFound("Unknown client: \(client)") }
+
+        let mappings = try db.query("SELECT id, workspace_id, desktop_name FROM slack_workspace_clients")
+        if mappings.contains(where: { row in
+            row["id"].string != id && (
+                workspaceID.map { row["workspace_id"].string == $0 } == true
+                    || name.map { row["desktop_name"].string?.caseInsensitiveCompare($0) == .orderedSame } == true
+            )
+        }) {
+            throw EngineError.conflict("This Slack workspace is already mapped. Edit its existing mapping.")
+        }
+        try db.execute("INSERT OR IGNORE INTO clients VALUES (?)", [client])
+        try db.execute("INSERT INTO slack_workspace_clients (id, workspace_id, desktop_name, client) VALUES (?, ?, ?, ?) "
+                       + "ON CONFLICT(id) DO UPDATE SET workspace_id = excluded.workspace_id, "
+                       + "desktop_name = excluded.desktop_name, client = excluded.client",
+                       [id ?? UUID().uuidString.lowercased(), workspaceID, name, client])
     }
 
     static let autoMinLength = 3
