@@ -72,6 +72,19 @@ struct FocusSessionChecks {
         assert(FocusRule.match(rules: [appRule, client, other], app: "Browser", title: "Café Client") == nil)
         assert(FocusRule.match(rules: [client], app: "Editor", title: "Café Client") == nil)
 
+        // Automatic name rules match whole words only; saved window rules still match any part of the title.
+        let named = FocusRule(id: "auto:project:Tracker", field: "window", keyword: "Tracker", appScope: nil,
+                              tag: nil, project: "Tracker", automatic: "project")
+        func automatic(_ title: String) -> FocusRule? {
+            if case let .matched(rule) = FocusRule.resolve(rules: [], app: "Editor", title: title, automatic: [named]) { return rule }
+            return nil
+        }
+        assert(automatic("Tracker – main.swift") == named && automatic("Open (Tracker)") == named)
+        assert(automatic("BugTracker") == nil && automatic("Trackers list") == nil && automatic("tracker2") == nil)
+        assert(automatic("Trackers and Tracker") == named)
+        let saved = FocusRule(id: "saved", field: "window", keyword: "Tracker", appScope: nil, tag: nil, project: "Tracker")
+        assert(FocusRule.match(rules: [saved], app: "Editor", title: "BugTracker") == saved)
+
         let installed = FocusRule(id: "installed", field: "app", keyword: "Browser", appScope: nil,
                                   tag: nil, project: "Installed", appID: "com.example.browser")
         let rules = [appRule, installed, client]

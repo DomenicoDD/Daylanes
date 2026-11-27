@@ -127,12 +127,23 @@ enum AgentOperations {
             }
             return nil
         }
+        /// A removed agent work tree (".../worktrees/<id>/<repo>") can no longer name its main checkout.
+        /// It is suggested for the one project whose mapped folders end in the same repository name.
+        func projectByName(_ root: String) -> String? {
+            guard root.contains("/worktrees/"), !FileManager.default.fileExists(atPath: root) else { return nil }
+            let name = (root as NSString).lastPathComponent.lowercased()
+            let projects = Set(mapped.filter { ($0.path as NSString).lastPathComponent.lowercased() == name }.map(\.project))
+            return projects.count == 1 ? projects.first : nil
+        }
         let sorted = groups.sorted { a, b in a.value.tokens != b.value.tokens ? a.value.tokens > b.value.tokens : a.key < b.key }
         let rows = sorted.prefix(limit).map { root, group -> JSON in
-            .object([
+            let byCheckout = project(for: group.main)
+            let byName = byCheckout == nil && group.main == nil ? projectByName(root) : nil
+            return .object([
                 ("repository", root.isEmpty ? .null : .string(root)),
                 ("name", root.isEmpty ? .null : .string((root as NSString).lastPathComponent)),
-                ("main_checkout", .optional(group.main)), ("suggested_project", .optional(project(for: group.main))),
+                ("main_checkout", .optional(group.main)), ("suggested_project", .optional(byCheckout ?? byName)),
+                ("suggested_by", byCheckout != nil ? .string("main_checkout") : byName != nil ? .string("repository_name") : .null),
                 ("tools", JSON.strings(group.tools.sorted())), ("folders", .int(Int64(group.folders.count))),
                 ("branches", .int(Int64(group.branches.count))), ("entries", .int(Int64(group.entries))),
                 ("tokens", .int(Int64(group.tokens))), ("runtime_millis", .int(Int64(group.runtime))),

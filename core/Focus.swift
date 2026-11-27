@@ -203,6 +203,8 @@ enum Focus {
     /// A domain ("app.example.com") or an HTTP(S) URL without query or fragment, normalised the way
     /// Python's `urllib.parse.urlsplit` and the IDNA codec read it.
     static func browserRule(_ field: String, _ keyword: String) throws -> String {
+        // An address typed without a scheme ("github.com/org") is an HTTPS URL, as the rule editor reads it.
+        let keyword = field == "url" && !keyword.contains("://") ? "https://" + keyword : keyword
         if keyword.unicodeScalars.contains(where: { $0.properties.isWhitespace || $0.value < 32 || (0x1C...0x1F).contains($0.value) }) {
             throw EngineError.invalid("A domain or URL cannot contain whitespace")
         }
@@ -446,6 +448,34 @@ enum Focus {
     }
 
     /// The Monday-to-Sunday week containing `day`, with each day's blocks and agent runtime.
+    /// Closed app blocks with no project and not ignored, one row per app and fallback client, largest first.
+    /// These are what get_status counts as unassigned_blocks; agent work without a project is a separate list.
+    static func unassignedActivity(_ db: Database, since: Int, until: Int, bounds: (String, String), limit: Int) throws -> JSON {
+        let rows = try db.query(
+            "SELECT app_id, app_name, focus_clients.client AS client, count(*) AS blocks, "
+            + "sum(min(ended_at, ?) - max(started_at, ?)) AS millis, max(ended_at) AS last_at, "
+            + "max(focus_blocks.id) AS sample_block_id FROM focus_blocks "
+            + "LEFT JOIN focus_clients ON focus_clients.block_id = focus_blocks.id "
+            + "WHERE project IS NULL AND ignored = 0 AND closed = 1 AND ended_at > ? AND started_at < ? "
+            + "GROUP BY app_id, app_name, focus_clients.client ORDER BY millis DESC, app_name LIMIT ?",
+            [until, since, since, until, max(1, min(limit, 500))])
+        let total = try db.first(
+            "SELECT count(*), coalesce(sum(min(ended_at, ?) - max(started_at, ?)), 0) FROM focus_blocks "
+            + "WHERE project IS NULL AND ignored = 0 AND closed = 1 AND ended_at > ? AND started_at < ?",
+            [until, since, since, until])
+        let zone = try Values.zone(try Store.timezoneName(db))
+        return .object([
+            ("start", .string(bounds.0)), ("end_exclusive", .string(bounds.1)),
+            ("block_count", .int(Int64(total?[0].int ?? 0))), ("millis", .int(Int64(total?[1].int ?? 0))),
+            ("apps", .array(rows.map { row in
+                .object([("app_id", row["app_id"].json), ("app_name", row["app_name"].json), ("client", row["client"].json),
+                         ("blocks", row["blocks"].json), ("millis", row["millis"].json),
+                         ("last_at", AgentOperations.instant(row["last_at"].int, zone: zone)),
+                         ("sample_block_id", row["sample_block_id"].json)])
+            })),
+        ])
+    }
+
     static func weekTimeline(_ db: Database, day text: String?) throws -> JSON {
         let zoneName = try Store.timezoneName(db)
         let zone = try Values.zone(zoneName)

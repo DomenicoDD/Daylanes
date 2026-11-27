@@ -226,8 +226,12 @@ struct MCPChecks {
         check(!welcome.contains("read-only") && welcome.contains("set_up_project"), "write access explains the setup tools")
         let writable = try send("tools/list")["result"]["tools"].arrayValue ?? []
         let writers = writable.filter { $0["annotations"]["readOnlyHint"] == .bool(false) }.compactMap { $0["name"].stringValue }
-        check(Set(writers) == ["create_client", "set_up_project", "move_project", "map_folder", "create_tracking_rule", "update_tracking_rule"],
+        check(Set(writers) == ["create_client", "set_up_project", "move_project", "map_folder", "create_tracking_rule", "update_tracking_rule",
+                               "delete_tracking_rule", "assign_activity", "set_chrome_profile_client", "sync_agents"],
               "write access adds the setup tools only")
+        check(writable.first { $0["name"].stringValue == "delete_tracking_rule" }?["annotations"]["destructiveHint"] == .bool(true),
+              "deleting a rule is marked destructive")
+        check(!writable.contains { $0["name"].stringValue == "set_tracking_enabled" }, "tracking can't be turned off over MCP")
         check(!writable.contains { ["save_rule", "log_time", "set_billing_terms", "delete_entry"].contains($0["name"].stringValue ?? "") },
               "rates, raw writes and entry deletion stay out of reach")
         check(try tool("get_status")["structuredContent"]["data"]["access"].stringValue == "write", "status reports write access")
@@ -319,6 +323,39 @@ struct MCPChecks {
               "setting a project on an ignored rule resumes tracking")
         let missing = try tool("update_tracking_rule", #"{"id":"missing","tag":"Meeting"}"#)
         check(missing["structuredContent"]["error"]["code"] == .string("not_found"), "editing a missing rule never creates it")
+
+        let bare = try data("create_tracking_rule", #"{"project":"Site","field":"url","keyword":"github.com/acme/site/"}"#)
+        check(bare["rule"]["keyword"] == .string("https://github.com/acme/site"), "a URL without a scheme is read as https")
+        let removed = try data("delete_tracking_rule", #"{"id":"\#(meetID)"}"#)
+        check(removed["deleted"]["id"] == .string(meetID), "a rule is deleted and returned")
+        check(try data("list_rules", "{}")["rules"].arrayValue?.contains { $0["id"].stringValue == meetID } == false, "the rule is gone")
+        check(try tool("delete_tracking_rule", #"{"id":"\#(meetID)"}"#)["structuredContent"]["error"]["code"] == .string("not_found"),
+              "deleting it twice says it is missing")
+        check(try tool("delete_tracking_rule", #"{"id":"auto:project:Site"}"#)["isError"] == .bool(true),
+              "automatic name rules can't be deleted")
+
+        let ledger = try Database(path: database)
+        for (id, end) in [("11111111-1111-4111-8111-111111111111", 1), ("22222222-2222-4222-8222-222222222222", 1),
+                          ("33333333-3333-4333-8333-333333333333", 0)] {
+            try ledger.execute("INSERT INTO focus_blocks VALUES (?, 'com.example.chat', 'Chat', ?, ?, ?, NULL, 0)",
+                               [id, Values.nowMillis() - 7_200_000, Values.nowMillis() - 3_600_000, end])
+        }
+        let appTime = try data("list_unassigned_activity", "{}")
+        check(appTime["block_count"].intValue == 2 && appTime["apps"].arrayValue?.first?["app_name"] == .string("Chat")
+              && appTime["millis"].intValue == 7_200_000, "unassigned app time is listed by app")
+        check(try data("get_status", "{}")["counts"]["unassigned_blocks"].intValue == 2, "status counts the same blocks")
+        _ = try data("assign_activity", #"{"ids":["11111111-1111-4111-8111-111111111111"],"project":"Site"}"#)
+        _ = try data("assign_activity", #"{"ids":["22222222-2222-4222-8222-222222222222"],"ignore":true}"#)
+        check(try data("list_unassigned_activity", "{}")["block_count"].intValue == 0, "assigned and ignored blocks leave the list")
+        let open = try tool("assign_activity", #"{"ids":["33333333-3333-4333-8333-333333333333"],"project":"Site"}"#)
+        check(open["structuredContent"]["error"]["code"] == .string("conflict"), "a block still being recorded is refused")
+        check(try tool("assign_activity", #"{"ids":[],"project":"Site"}"#)["isError"] == .bool(true), "assigning needs a block")
+        check(try data("set_chrome_profile_client", #"{"profile_id":"Profile 12","client":"Acme"}"#)["chrome_profile_clients"]["Profile 12"]
+              == .string("Acme"), "a Chrome profile links to a client")
+        check(try data("set_chrome_profile_client", #"{"profile_id":"Profile 12","client":""}"#)["chrome_profile_clients"]["Profile 12"]
+              .isNull, "an empty client removes the link")
+        check(try tool("set_chrome_profile_client", #"{"profile_id":"Profile 12","client":"Nobody"}"#)["isError"] == .bool(true),
+              "an unknown client is refused")
         var plain = MCP.Session(options: MCP.Options(databasePath: database, lockReason: { nil }))
         plain.initialized = true
         check(!plain.tools.contains { $0.toolset == "setup" }, "a read connection never gets the setup tools")

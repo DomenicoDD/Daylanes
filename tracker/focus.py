@@ -156,6 +156,9 @@ def rule_values(field, keyword, app_scope, tag):
 
 
 def browser_rule(field, keyword):
+    # An address typed without a scheme ("github.com/org") is an HTTPS URL, as the rule editor reads it.
+    if field == "url" and "://" not in keyword:
+        keyword = "https://" + keyword
     if any(c.isspace() or ord(c) < 32 for c in keyword):
         raise ValueError("A domain or URL cannot contain whitespace")
     if "#" in keyword or "?" in keyword:

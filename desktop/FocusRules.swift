@@ -97,7 +97,9 @@ struct FocusRule: Codable, Equatable, Identifiable {
                 return tab?.matches(prefix: rule.keyword) == true
             }
             if rule.needsWindowTitle {
-                return rule.appliesToApp(app, id: appID) && title.map { contains($0, rule.keyword) } == true
+                // A project or client name matches only as a whole word, so "Tracker" doesn't catch "BugTracker".
+                let match = rule.automatic == nil ? contains : containsWord
+                return rule.appliesToApp(app, id: appID) && title.map { match($0, rule.keyword) } == true
             }
             if let target = rule.appID { return target == appID }
             return contains(app, rule.keyword) || contains(displayName, rule.keyword)
@@ -116,6 +118,22 @@ struct FocusRule: Codable, Equatable, Identifiable {
 
     private static func contains(_ value: String, _ keyword: String) -> Bool {
         value.range(of: keyword, options: [.caseInsensitive, .diacriticInsensitive], locale: .current) != nil
+    }
+
+    /// `contains`, but the match can't run on into a letter or digit on either side.
+    static func containsWord(_ value: String, _ keyword: String) -> Bool {
+        var start = value.startIndex
+        while let found = value.range(of: keyword, options: [.caseInsensitive, .diacriticInsensitive],
+                                      range: start..<value.endIndex, locale: .current) {
+            let before = found.lowerBound == value.startIndex ? nil : value[value.index(before: found.lowerBound)]
+            let after = found.upperBound == value.endIndex ? nil : value[found.upperBound]
+            if !(before?.isLetter ?? false || before?.isNumber ?? false),
+               !(after?.isLetter ?? false || after?.isNumber ?? false) {
+                return true
+            }
+            start = value.index(after: found.lowerBound)
+        }
+        return false
     }
 }
 

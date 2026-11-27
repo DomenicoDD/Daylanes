@@ -38,7 +38,7 @@ enum FocusOperations {
         EngineOperation(name: "set_chrome_profile_client", summary: "Set the fallback client for future Chrome activity in a profile.",
                         effect: .config) { params, db, _ in
             let p = Params(params)
-            try Focus.setChromeProfileClient(db, profileID: try p.required("profile_id"), client: try p.string("client"))
+            try Focus.setChromeProfileClient(db, profileID: try p.required("profile_id"), client: try p.string("client").flatMap { $0.isEmpty ? nil : $0 })
             return try Focus.config(db)
         },
         EngineOperation(name: "set_tracking_enabled", summary: "Turn foreground app tracking on or off.", effect: .config) { params, db, _ in
@@ -98,6 +98,16 @@ enum FocusOperations {
             try db.execute("DELETE FROM focus_rules WHERE id = ?", [try Params(params).required("id")])
             return try Focus.config(db)
         },
+        EngineOperation(name: "delete_tracking_rule", summary: "Delete a saved tracking rule by ID and return it.",
+                        effect: .guarded) { params, db, _ in
+            let id = try Params(params).required("id")
+            if id.hasPrefix("auto:") {
+                throw EngineError.invalid("Automatic name rules can't be deleted. Turn them off for the project instead.")
+            }
+            let deleted = try rule(db, id: id)
+            try db.execute("DELETE FROM focus_rules WHERE id = ?", [id])
+            return .object([("deleted", deleted)])
+        },
         EngineOperation(name: "set_auto_rules", summary: "Turn a project's automatic name rules on or off.",
                         effect: .config) { params, db, _ in
             let p = Params(params)
@@ -107,12 +117,22 @@ enum FocusOperations {
         EngineOperation(name: "classify_activity", summary: "Assign, ignore or unassign recorded blocks.",
                         effect: .reversible) { params, db, _ in
             let p = Params(params)
-            let ids = [try p.required("id")] + (try p.strings("additional_ids") ?? [])
+            // "ids" is the MCP form; "id" with "additional_ids" is what the app and CLI send.
+            let ids = try p.strings("ids") ?? ([try p.required("id")] + (try p.strings("additional_ids") ?? []))
+            guard !ids.isEmpty, ids.count <= 1000 else { throw EngineError.invalid("Give between 1 and 1,000 block IDs") }
             let project = try p.string("project"), ignore = try p.bool("ignore")
             for id in ids {
                 try Focus.classify(db, id: id, project: project, ignored: ignore)
             }
             return .null
+        },
+        EngineOperation(name: "unassigned_activity", summary: "Recorded app time with no project, grouped by app.",
+                        effect: .read) { params, db, _ in
+            let p = Params(params)
+            let range = try EntryStore.dayRange(db, start: try p.string("start"), end: try p.string("end"),
+                                                period: try p.string("period") ?? "week")
+            return try Focus.unassignedActivity(db, since: range.since, until: range.until,
+                                                bounds: (range.first, range.last), limit: try p.int("limit") ?? 50)
         },
         EngineOperation(name: "get_week", summary: "The Monday-to-Sunday week of recorded blocks and agent runtime.",
                         effect: .read) { params, db, _ in
